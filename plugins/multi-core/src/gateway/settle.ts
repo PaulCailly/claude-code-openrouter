@@ -1,5 +1,5 @@
 /** Grace period for a cancelled native operation to report its own outcome. */
-export const abortGraceMs = 5000;
+const abortGraceMs = 5000;
 
 /**
  * Wait for a native operation without an overall deadline. Native runs may

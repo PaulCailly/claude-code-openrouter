@@ -136,7 +136,7 @@ function normalizeModels(value: string | undefined): string | undefined {
   for (const model of models) {
     if (!/^multi\/[a-z]+\/[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(model)) {
       throw new Error(
-        `Invalid picker model ID: ${JSON.stringify(model)}. Use full IDs such as multi/openai/gpt-6-astra, or all/none.`,
+        `Invalid picker model ID: ${JSON.stringify(model)}. Use full IDs such as multi/zen/glm-5.3, or all/none.`,
       );
     }
   }

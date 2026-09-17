@@ -9,8 +9,8 @@ const dashboard = {
   updatedAt: 'today',
   providers: [
     {
-      id: 'cursor',
-      name: 'Cursor',
+      id: 'zen',
+      name: 'Zen',
       status: 'ready',
       summary: '$0.00 charged',
       details: ['native spend'],
@@ -118,7 +118,7 @@ test('usage Client supports provider navigation, receipts and refresh without mo
   keyHandler?.({ key: 'r' });
   assert.deepEqual(posts.at(-1), { action: 'receipts' });
   keyHandler?.({ key: 'left' });
-  assert.equal(state?.selected, 'cursor');
+  assert.equal(state?.selected, 'zen');
   const providerTree = view(dashboard, surface);
   assert(JSON.stringify(providerTree).includes('native spend'));
   keyHandler?.({ key: 'r' });

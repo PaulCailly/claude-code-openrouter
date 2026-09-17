@@ -7,25 +7,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { AntigravityHarness } from '../../multi-antigravity/src/harness.ts';
-import {
-  checkAntigravityHooks,
-  installAntigravityHook,
-} from '../../multi-antigravity/src/hooks.ts';
-import {
-  type AntigravityModel,
-  antigravityPickerOptions,
-  discoverAntigravityModels,
-} from '../../multi-antigravity/src/models.ts';
-import { antigravityPermissionPolicy } from '../../multi-antigravity/src/permissions.ts';
-import { CursorHarness } from '../../multi-cursor/src/harness.ts';
-import type { CursorModelOption } from '../../multi-cursor/src/models.ts';
-import { cursorModelOptions, cursorPickerOptions } from '../../multi-cursor/src/models.ts';
-import { mergeCursorPermissions } from '../../multi-cursor/src/permissions.ts';
-import { CursorWorkspaces } from '../../multi-cursor/src/workspaces.ts';
-import { createOpenAIApproval, discoverOpenAIReviewer } from '../../multi-openai/src/approval.ts';
-import { readCodexAuth } from '../../multi-openai/src/auth.ts';
-import { MODELS, OPENAI_WORKERS } from '../../multi-openai/src/models.ts';
 import { readZenKey } from '../../multi-zen/src/auth.ts';
 import { ZEN_MODELS, ZEN_WORKERS, zenPickerOptions } from '../../multi-zen/src/models.ts';
 import { AgentCatalog } from './gateway/agent-catalog.ts';
@@ -34,7 +15,6 @@ import {
   type PluginPermissionInventory,
   pluginPermissions,
 } from './gateway/agent-definitions.ts';
-import { checkCursorSettings } from './gateway/cursor-settings.ts';
 import type { Effort } from './gateway/effort.ts';
 import { executableInvocation, resolveExecutable } from './gateway/executable.ts';
 import { ModBridge } from './gateway/mod-bridge.ts';
@@ -83,11 +63,6 @@ interface LaunchSettings {
 async function main() {
   const args = process.argv.slice(2);
   await handleCommand(args[0]);
-  const { cursorModels, cursorSignedIn } = await discoverCursor(args[0] === '--cursor-models');
-  if (args[0] === '--cursor-models') {
-    printCursorModels(cursorModels, cursorSignedIn);
-    return;
-  }
   if (args[0] === '--') {
     args.shift();
   }
@@ -96,19 +71,9 @@ async function main() {
   const pluginRoot = await findPluginRoot(fileURLToPath(import.meta.url));
   await assertFunctionHooksSupported();
   const anthropic = await anthropicSignedIn();
-  const cursorPicker = cursorPickerOptions(
-    cursorModels,
-    cursorModels.length ? process.env.MULTI_CURSOR_EXTRA_MODELS : undefined,
-  );
-  const authFile = path.join(
-    process.env.CODEX_HOME || path.join(os.homedir(), '.codex'),
-    'auth.json',
-  );
-  const { codexSignedIn, openaiReview } = await discoverOpenAI(authFile);
   const zenKey = providerEnabled('zen') ? await readZenKey() : undefined;
-  const antigravityModels = await discoverAntigravity();
   const token = randomBytes(32).toString('hex');
-  const settings = pickerSettings(codexSignedIn, cursorPicker, Boolean(zenKey), antigravityModels);
+  const settings = pickerSettings(Boolean(zenKey));
   await mergeSettings(args, settings);
   // The supervisor does not transfer --agents or our session-local gateway env,
   // and can outlive the child whose exit releases settingsDir and the gateway.
@@ -116,13 +81,7 @@ async function main() {
   settings.disableAgentView = true;
   filterPicker(settings, process.env.MULTI_MODELS);
   const callerSettings = structuredClone(settings);
-  const { cursor, antigravity } = nativeHarnesses(
-    cursorModels,
-    antigravityModels,
-    args,
-    callerSettings,
-  );
-  const agents = workerDefinitions(codexSignedIn, cursorPicker, Boolean(zenKey), antigravityModels);
+  const agents = workerDefinitions(Boolean(zenKey));
   const modBridge = new ModBridge();
   const settingsDir = await mkdtemp(path.join(os.tmpdir(), 'multi-native-settings-'));
   const callerSettingsFile = path.join(settingsDir, 'caller-settings.json');
@@ -135,23 +94,9 @@ async function main() {
         [...args, '--settings', callerSettingsFile],
         pluginInventory,
       ),
-    async (cwd) => {
-      if (!cursor && !antigravity) {
-        return {};
-      }
-      try {
-        return await checkCursorSettings(cwd, args, callerSettings);
-      } catch (error) {
-        return { nativePermissionError: String(error) };
-      }
-    },
+    async () => ({}),
   );
   await permissionModes.precompute(process.cwd());
-  const { approvalBridge, approvalProviders } = await discoverApprovals(
-    authFile,
-    cursorModels.length > 0,
-    openaiReview,
-  );
   const receipts = new ReceiptLedger({
     file: process.env.MULTI_RECEIPTS_FILE
       ? path.resolve(process.env.MULTI_RECEIPTS_FILE)
@@ -164,14 +109,9 @@ async function main() {
     receipts,
     token,
     enabledProviders,
-    authFile,
     modBridge,
-    cursor,
-    antigravity,
     zen: zenKey ? { apiKey: zenKey } : undefined,
     permissionModes,
-    approvalBridge,
-    approvalProviders,
     blockAnthropic: !anthropic,
     guardAuto: true,
     agentCatalog: new AgentCatalog(
@@ -193,7 +133,7 @@ async function main() {
   if (!initialModel && selectedModel) {
     args.push('--model', selectedModel);
   }
-  configureApproval(settings, approvalProviders, selectedModel, Boolean(antigravity), anthropic);
+  configureApproval(settings, selectedModel, anthropic);
   await writeFile(settingsFile, JSON.stringify(settings), { mode: 0o600 });
   const definitions = JSON.stringify(agents);
   const childEnvironment = gatewayEnvironment(address.port, token, anthropic);
@@ -218,8 +158,6 @@ async function main() {
     checkLauncherArgumentLimit(agents, childInvocation, claudePath, process.platform);
   } catch (error) {
     server.close();
-    await cursor?.close();
-    await antigravity?.close();
     receipts.finishAll();
     await receipts.drain();
     await rm(settingsDir, { recursive: true, force: true });
@@ -235,8 +173,6 @@ async function main() {
   const shutdown = async () => {
     server.closeAllConnections();
     server.close();
-    await cursor?.close();
-    await antigravity?.close();
     receipts.finishAll();
     await receipts.drain();
     await rm(settingsDir, { recursive: true, force: true });
@@ -312,62 +248,6 @@ function validateSessionLaunch(args: string[]) {
   if (args.some((arg) => arg === '--agents' || arg.startsWith('--agents='))) {
     throw new Error('This launcher supplies --agents; use agent files for additional agents.');
   }
-}
-
-function nativeHarnesses(
-  cursorModels: CursorModelOption[],
-  antigravityModels: AntigravityModel[],
-  args: string[],
-  callerSettings: LaunchSettings,
-) {
-  const cursor = cursorModels.length
-    ? new CursorWorkspaces(
-        (cwd) =>
-          new CursorHarness(cursorModels, {
-            cwd,
-            checkPermissions: () => checkCursorSettings(cwd, args, callerSettings),
-          }),
-      )
-    : undefined;
-  const antigravity = antigravityModels.length
-    ? new AntigravityHarness(antigravityModels, {
-        checkPermissions: async (cwd, context) => {
-          await checkAntigravityHooks();
-          const restrictions = await checkCursorSettings(cwd, args, callerSettings);
-          return antigravityPermissionPolicy(mergeCursorPermissions(context, restrictions));
-        },
-      })
-    : undefined;
-  return { cursor, antigravity };
-}
-
-async function discoverCursor(required: boolean) {
-  if (!providerEnabled('cursor')) {
-    return { cursorModels: [] as CursorModelOption[], cursorSignedIn: false };
-  }
-  const { Cursor } = await import('@cursor/sdk');
-  const cursorSignedIn =
-    Boolean(process.env.CURSOR_API_KEY) || (await Cursor.auth.status()).status === 'logged-in';
-  let cursorModels: CursorModelOption[] = [];
-  if (cursorSignedIn) {
-    let timer: NodeJS.Timeout | undefined;
-    try {
-      const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Cursor model discovery timed out')), 15000);
-      });
-      cursorModels = cursorModelOptions(await Promise.race([Cursor.models.list(), timeout]));
-    } catch (error) {
-      if (required) {
-        throw error;
-      }
-      console.error(
-        `Cursor choices unavailable: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  return { cursorModels, cursorSignedIn };
 }
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
@@ -504,57 +384,8 @@ async function anthropicSignedIn(): Promise<boolean> {
   return parseAuthProbeOutput(stdout);
 }
 
-async function discoverOpenAI(authFile: string) {
-  if (!providerEnabled('openai')) {
-    return { codexSignedIn: false, openaiReview: false };
-  }
-  let codexSignedIn = false;
-  try {
-    await readCodexAuth(authFile);
-    codexSignedIn = true;
-  } catch {
-    console.error('OpenAI choices unavailable: sign in with codex login to enable them.');
-  }
-  let openaiReview = false;
-  if (codexSignedIn) {
-    try {
-      openaiReview = await discoverOpenAIReviewer(authFile);
-    } catch {
-      /* Missing capability disables auto mode; inference remains available. */
-    }
-    if (!openaiReview) {
-      console.error('OpenAI automatic reviewer unavailable; auto mode is disabled.');
-    }
-  }
-  return { codexSignedIn, openaiReview };
-}
-
-export function workerDefinitions(
-  codexSignedIn: boolean,
-  cursorPicker: CursorModelOption[],
-  zen: boolean,
-  antigravityModels: AntigravityModel[],
-) {
-  const agents: Record<string, AgentDefinition> = Object.fromEntries(
-    Object.entries(codexSignedIn ? OPENAI_WORKERS : {}).map(([name, { model, effort }]) => [
-      name,
-      {
-        description: `${model}, ${effort} reasoning. Native coding, investigation, and review.`,
-        prompt: WORKER_PROMPT,
-        model: `multi/openai/${model}`,
-        tools: ['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write'],
-        effort,
-      },
-    ]),
-  );
-  for (const option of cursorPicker) {
-    agents[option.worker] = {
-      description: option.description,
-      prompt: WORKER_PROMPT,
-      model: option.model,
-      tools: ['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write'],
-    };
-  }
+export function workerDefinitions(zen: boolean) {
+  const agents: Record<string, AgentDefinition> = {};
   for (const [name, option] of Object.entries(zen ? ZEN_WORKERS : {})) {
     agents[name] = {
       description: `OpenCode Zen ${option.model}${option.effort ? `, ${option.effort} effort` : ''}. Uses native Claude Code tools.`,
@@ -562,16 +393,6 @@ export function workerDefinitions(
       model: option.model,
       tools: ['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write'],
       ...(option.effort ? { effort: option.effort } : {}),
-    };
-  }
-  for (const option of [...antigravityModels, ...antigravityPickerOptions(antigravityModels)]) {
-    const effort = option.id.match(/-(low|medium|high)$/)?.[1] as Effort | undefined;
-    agents[option.worker] = {
-      description: `${option.label}. Native Antigravity CLI coding worker.`,
-      prompt: WORKER_PROMPT,
-      model: option.model,
-      tools: ['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write'],
-      ...(effort ? { effort } : {}),
     };
   }
   return agents;
@@ -655,11 +476,7 @@ async function initialSelection(args: string[], settings: LaunchSettings, anthro
   }
   // With no Claude login, start on an available external model instead of Sonnet.
   const options = settings.modelPicker.options;
-  const defaultModel =
-    process.env.MULTI_MODELS === undefined
-      ? options.find((option) => option.model === 'multi/openai/gpt-5.6-luna')
-      : undefined;
-  const fallback = anthropic ? undefined : (defaultModel ?? options[0])?.model;
+  const fallback = anthropic ? undefined : options[0]?.model;
   return { initialModel, selectedModel: initialModel ?? fallback };
 }
 
@@ -685,43 +502,10 @@ function filterPicker(settings: LaunchSettings, selection: string | undefined) {
   });
 }
 
-function approvalProvider(model: string | undefined): 'openai' | 'cursor' | undefined {
-  if (model?.startsWith('multi/openai/')) {
-    return 'openai';
-  }
-  if (model?.startsWith('multi/cursor/')) {
-    return 'cursor';
-  }
-  return undefined;
-}
-
-async function discoverApprovals(
-  authFile: string,
-  cursorAvailable: boolean,
-  openaiReview: boolean,
-) {
-  const approvalProviders: ('openai' | 'cursor')[] = cursorAvailable ? ['cursor'] : [];
-  if (openaiReview) {
-    approvalProviders.push('openai');
-  }
-  return {
-    approvalProviders,
-    approvalBridge: openaiReview ? await createOpenAIApproval(authFile, process.cwd()) : undefined,
-  };
-}
-
-function configureApproval(
-  settings: LaunchSettings,
-  providers: readonly ('openai' | 'cursor')[],
-  selectedModel?: string,
-  antigravityAvailable = false,
-  anthropic = false,
-) {
-  const provider = approvalProvider(selectedModel);
-  const nativeAntigravity = antigravityAvailable && selectedModel?.startsWith('multi/antigravity/');
+function configureApproval(settings: LaunchSettings, selectedModel?: string, anthropic = false) {
   const nativeClaude =
     anthropic && (!selectedModel?.startsWith('multi/') || selectedModel.startsWith('multi/zen/'));
-  if (!nativeClaude && !nativeAntigravity && (!provider || !providers.includes(provider))) {
+  if (!nativeClaude) {
     settings.permissions = { ...settings.permissions, disableAutoMode: 'disable' };
   }
   // --settings is fixed for the session. A per-tool capability guard also covers
@@ -738,32 +522,14 @@ function configureApproval(
 }
 
 async function handleCommand(command?: string) {
-  if (command === '--antigravity-setup') {
-    await installAntigravityHook();
-    console.log('Antigravity native permission hook installed. Native login remains owned by agy.');
-    process.exit(0);
-  }
-  if (command === '--antigravity-models') {
-    console.log(JSON.stringify(await discoverAntigravityModels(), null, 2));
-    process.exit(0);
-  }
   if (command === '--zen-models') {
     console.log(JSON.stringify(ZEN_MODELS, null, 2));
     process.exit(0);
   }
   if (command === '--help') {
     console.log(
-      'Usage: node plugins/multi-core/src/launcher.ts [--cursor-login | --cursor-models | --zen-models | --antigravity-models | --antigravity-setup] [-- <claude arguments>]\nLaunch Claude with external models and native coding workers.\n--cursor-login: official Cursor SDK browser sign-in\n--cursor-models: list account model choices and worker names\n--zen-models: list supported Zen models and capabilities\nMULTI_ANTIGRAVITY=1: enable native Antigravity models and workers\n--antigravity-setup: install the scoped native permission hook\n--antigravity-models: inspect the official Antigravity CLI catalog (native login required)\nOPENCODE_API_KEY: Zen key (or use OpenCode /connect)\nMULTI_ZEN_MODELS: comma-separated Zen model IDs to show, leaving other providers unchanged\nMULTI_MODELS: comma-separated full model IDs to show in /model (unset: defaults; empty: hide external rows)\nMULTI_CURSOR_EXTRA_MODELS: comma-separated Cursor model IDs to add to Auto, Grok 4.6, and Composer 2.5 in /model',
+      'Usage: node plugins/multi-core/src/launcher.ts [--zen-models] [-- <claude arguments>]\nLaunch Claude with external models and native coding workers.\n--zen-models: list supported Zen models and capabilities\nOPENCODE_API_KEY: Zen key\nMULTI_ZEN_MODELS: comma-separated Zen model IDs to show\nMULTI_MODELS: comma-separated full model IDs to show in /model (unset: defaults; empty: hide external rows)',
     );
-    process.exit(0);
-  }
-  if (command === '--cursor-login') {
-    const { Cursor } = await import('@cursor/sdk');
-    await Cursor.auth.login({
-      apiKeyName: 'cc-multi-cli',
-      onLoginUrl: (url) => console.log(`Cursor login: ${url}`),
-    });
-    console.log('Cursor SDK login saved. Launch the gateway normally to use it.');
     process.exit(0);
   }
 }
@@ -811,24 +577,6 @@ async function savedSelection(args: string[]) {
   return savedModel;
 }
 
-function printCursorModels(cursorModels: CursorModelOption[], cursorSignedIn: boolean) {
-  if (!cursorSignedIn) {
-    throw new Error('Run with --cursor-login first.');
-  }
-  console.log(
-    JSON.stringify(
-      cursorModels.map(({ model, label, worker, selection, nativeWorker }) => ({
-        model,
-        label,
-        worker: nativeWorker ? worker : undefined,
-        selection,
-      })),
-      null,
-      2,
-    ),
-  );
-}
-
 /** Client compatibility only, not provider equivalence. Both profiles default to 200K
  * in Claude 2.1.267; newer xhigh profiles imply native 1M and are deliberately not used.
  * Provider validation remains authoritative for every requested effort value. */
@@ -836,36 +584,10 @@ function pickerProfile(adjustableEffort: boolean): string {
   return adjustableEffort ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
 }
 
-function pickerSettings(
-  codexSignedIn: boolean,
-  cursorPicker: CursorModelOption[],
-  zen: boolean,
-  antigravityModels: AntigravityModel[],
-) {
+function pickerSettings(zen: boolean) {
   const settings: LaunchSettings = {
     modelPicker: {
       options: [
-        ...Object.values(codexSignedIn ? MODELS : {}).map((model) => ({
-          model: `multi/openai/${model}`,
-          label: model,
-          description: 'OpenAI subscription · native Claude Code harness',
-          behavesAs: pickerProfile(true),
-        })),
-        ...cursorPicker.map(({ model, label, description, catalog }) => ({
-          model,
-          label,
-          description,
-          behavesAs: pickerProfile(
-            catalog.parameters?.some(({ id }) => ['effort', 'reasoning_effort'].includes(id)) ??
-              false,
-          ),
-        })),
-        ...antigravityPickerOptions(antigravityModels).map(({ model, label }) => ({
-          model,
-          label,
-          behavesAs: pickerProfile(true),
-          description: 'Native Antigravity CLI',
-        })),
         ...(zen ? zenPickerOptions(process.env.MULTI_ZEN_MODELS) : []).map(
           ({ model, label, efforts }) => ({
             model,
@@ -930,27 +652,6 @@ function traceEvent(event: GatewayEvent) {
   if (process.env.MULTI_NATIVE_TRACE === '1') {
     process.stderr.write(`[native] ${JSON.stringify(event)}\n`);
   }
-}
-
-async function discoverAntigravity() {
-  let antigravityModels: AntigravityModel[] = [];
-  if (providerEnabled('antigravity') && process.env.MULTI_ANTIGRAVITY === '1') {
-    try {
-      resolveExecutable('agy');
-      antigravityModels = await discoverAntigravityModels();
-    } catch (error) {
-      if (!isMissingExecutable(error)) {
-        throw error;
-      }
-      console.error(
-        `Antigravity choices unavailable: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-  if (enabledProviders?.includes('antigravity') && antigravityModels.length) {
-    await installAntigravityHook();
-  }
-  return antigravityModels;
 }
 
 function isMissingExecutable(error: unknown): boolean {

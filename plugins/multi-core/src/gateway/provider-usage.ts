@@ -1,7 +1,6 @@
-import type { CodexQuota } from '../../../multi-openai/src/usage.ts';
 import type { UsageSnapshot } from './receipts.ts';
 
-type UsageProvider = 'openai' | 'cursor' | 'zen' | 'antigravity';
+type UsageProvider = 'zen';
 interface ProviderUsageRow {
   id: UsageProvider;
   name: string;
@@ -16,10 +15,7 @@ export interface ProviderUsageView {
 }
 interface ProviderUsageOptions {
   enabled: readonly string[];
-  openai?: ProviderUsageReader;
-  cursor?: ProviderUsageReader;
   zen?: ProviderUsageReader;
-  antigravity?: ProviderUsageReader;
   now?: () => number;
 }
 type ProviderUsageReader = (session: string) => Promise<{
@@ -27,22 +23,11 @@ type ProviderUsageReader = (session: string) => Promise<{
   details: string[];
   status?: ProviderUsageRow['status'];
 }>;
-const providers = [
-  { id: 'openai', name: 'OpenAI / Codex', url: 'https://chatgpt.com/codex/settings/usage' },
-  { id: 'cursor', name: 'Cursor', url: 'https://cursor.com/dashboard?tab=usage' },
-  { id: 'zen', name: 'OpenCode Zen', url: 'https://opencode.ai/zen' },
-  { id: 'antigravity', name: 'Antigravity' },
-] as const;
+const providers = [{ id: 'zen', name: 'OpenCode Zen', url: 'https://opencode.ai/zen' }] as const;
 const unavailable: Record<UsageProvider, string[]> = {
-  openai: ['Sign in with codex login to read account quota windows.'],
-  cursor: ['Sign in with the Cursor SDK to read subscription quota.'],
   zen: [
     'Go subscription quota requires a supported Zen API key.',
     'Check the Zen billing console for credits and charges.',
-  ],
-  antigravity: [
-    'Native Antigravity account quota could not be retrieved.',
-    'Run /usage or /credits inside agy to view your account.',
   ],
 };
 
@@ -157,27 +142,4 @@ export class ProviderUsageDashboard {
       })),
     };
   }
-}
-
-export function codexQuotaView(quota: CodexQuota) {
-  const details = quota.windows.map((window) => {
-    const used = Math.max(0, Math.min(100, window.usedPercent));
-    const filled = Math.round((used / 100) * 16);
-    const bar = '█'.repeat(filled) + '░'.repeat(16 - filled);
-    return `${window.label}: ${bar} ${window.usedPercent}% used${window.resetsAt ? ` · resets ${window.resetsAt}` : ''}`;
-  });
-  if (quota.credits) {
-    details.push(
-      quota.credits.unlimited
-        ? 'Credits: unlimited'
-        : `Credits remaining: ${quota.credits.balance ?? 'not reported'}`,
-    );
-  }
-  details.push('Account quota across Codex activity; not API dollar spend.');
-  return {
-    summary: quota.windows.length
-      ? `${quota.plan ? `${quota.plan} · ` : ''}${quota.windows.map((window) => `${window.label}: ${window.usedPercent}% used`).join(' · ')}`
-      : 'No account quota windows reported',
-    details,
-  };
 }

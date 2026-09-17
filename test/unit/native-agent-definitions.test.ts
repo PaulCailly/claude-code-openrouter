@@ -8,7 +8,6 @@ import {
   loadWorkerPermissions,
   pluginPermissions,
 } from '../../plugins/multi-core/src/gateway/agent-definitions.ts';
-import { cursorPermissionPolicy } from '../../plugins/multi-cursor/src/permissions.ts';
 
 async function writeAgent(directory: string, name: string, source: string) {
   const agents = path.join(directory, '.claude', 'agents');
@@ -162,6 +161,5 @@ test('worker hooks do not restrict the native worker', async () => {
   assert.deepEqual(definitions.ordinary.tools, ['Read']);
   assert.equal(definitions['general-purpose'].nativePermissionError, undefined);
   for (const definition of [definitions.guarded, definitions.ordinary]) {
-    assert.doesNotThrow(() => cursorPermissionPolicy({ ...definition, permissionMode: 'auto' }));
   }
 });

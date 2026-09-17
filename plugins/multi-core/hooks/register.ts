@@ -4,15 +4,6 @@ import { register as registerLifecycle } from './lifecycle.ts';
 import { register as registerUsage } from './usage.ts';
 import { register as registerWorkers } from './workers.ts';
 
-const displayTools = [
-  ['read', 'Display-only Cursor file read.'],
-  ['search', 'Display-only Cursor search.'],
-  ['edit', 'Display-only Cursor edit.'],
-  ['shell', 'Display-only Cursor shell action.'],
-  ['other', 'Display-only Cursor action.'],
-  ['note', 'Display-only Cursor progress note.'],
-] as const;
-const prefix = 'mcp__multi-core__cursor_';
 const maxBody = 32000;
 
 type DisplayInput = {
@@ -51,44 +42,6 @@ export const register: Register = (on, options) => {
   registerLifecycle(on, options);
   registerCompaction(on, options);
   registerWorkers(on, options);
-  for (const [name, _description] of displayTools) {
-    const tool = `${prefix}${name}` as const;
-    on('tool.call', { tool }, async (_$, event) => {
-      // The tool's own arguments sit beside the reserved keys on the envelope.
-      const input = event as unknown as DisplayInput;
-      return {
-        result: {
-          type: 'text',
-          text: input.output ?? 'Display result unavailable.',
-          is_error: input.isError === true,
-        },
-      };
-    });
-    on('tool.check', { tool }, () => ({
-      decision: 'allow' as const,
-      reason: 'Display-only row; it never executes a Cursor action.',
-    }));
-    on('ui.render', { component: 'ToolUse', props: { tool } }, async ($, event, next) => {
-      const { Box, Text } = $.ui.resolve(event);
-      const input = event.props.input as DisplayInput;
-      const row = await next(event);
-      return Box({
-        flexDirection: 'column',
-        children: [
-          Text({ color: 'cyan', children: `Cursor ${name}: ${input.description ?? ''}` }),
-          row,
-        ],
-      });
-    });
-    on('ui.render', { component: 'ToolResult', props: { tool } }, async ($, event, next) => {
-      const { Box, Text } = $.ui.resolve(event);
-      const row = await next(event);
-      return Box({
-        flexDirection: 'column',
-        children: [Text({ color: 'cyan', children: `Cursor ${name} complete` }), row],
-      });
-    });
-  }
   on('session.start', async ($, event, next) => {
     if (!(await active($))) {
       return next(event);
@@ -98,27 +51,6 @@ export const register: Register = (on, options) => {
       description: 'Open provider quotas, spend, and session receipts.',
       immediate: true,
     });
-    for (const [name, description] of displayTools) {
-      try {
-        await $.tool.register({
-          name: `cursor_${name}`,
-          description,
-          inputSchema: {
-            type: 'object',
-            properties: {
-              description: { type: 'string', maxLength: 160 },
-              output: { type: 'string', maxLength: 4096 },
-              isError: { type: 'boolean' },
-              toolUseId: { type: 'string', maxLength: 512 },
-            },
-            required: ['description', 'output', 'isError', 'toolUseId'],
-            additionalProperties: false,
-          },
-        });
-      } catch {
-        // Toolless slash-command sessions still need the gateway lifecycle hooks.
-      }
-    }
     const response = await request($, '/multi/mod/session', {
       sessionId: await $.session.id(),
       cwd: await $.session.cwd(),

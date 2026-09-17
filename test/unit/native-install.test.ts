@@ -329,7 +329,7 @@ test('Windows executable discovery uses PATHEXT and does not require mode bits',
 test('provider selection and native settings arguments preserve explicit disablement', () => {
   assert.equal(providerSelection(undefined), undefined);
   assert.deepEqual(providerSelection(''), []);
-  assert.deepEqual(providerSelection('zen,zen,openai'), ['zen', 'openai']);
+  assert.deepEqual(providerSelection('zen,zen'), ['zen']);
   assert.throws(() => providerSelection('typo'), /Unknown Multi provider/);
   assert.deepEqual(
     settingsArguments([

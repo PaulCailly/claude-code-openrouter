@@ -23,26 +23,11 @@ test('usage command reads only the current session without model dispatch', asyn
           updatedAt: '2026-09-16T12:00:00Z',
           providers: [
             {
-              id: 'openai',
-              name: 'OpenAI',
+              id: 'zen',
+              name: 'Zen',
               status: 'ready',
               summary: '10 tokens',
               details: ['input 6', 'output 4'],
-            },
-            {
-              id: 'zen',
-              name: 'Zen',
-              status: 'unavailable',
-              summary: 'Unavailable',
-              details: ['not connected'],
-            },
-            { id: 'cursor', name: 'Cursor', status: 'disabled', summary: 'Disabled', details: [] },
-            {
-              id: 'antigravity',
-              name: 'Antigravity',
-              status: 'error',
-              summary: 'Error',
-              details: ['login required'],
             },
           ],
         }),
@@ -58,7 +43,7 @@ test('usage command reads only the current session without model dispatch', asyn
     props: { title: 'Multi usage', isFocused: true, bodyColumns: 80 },
   });
   expect(JSON.stringify(rendered)).toContain('usage-view.ts');
-  expect(JSON.stringify(rendered)).toContain('OpenAI');
+  expect(JSON.stringify(rendered)).toContain('Zen');
 });
 
 test('worker completion awaits accounting and preserves the engine answer', async ($, on) => {

@@ -11,15 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && node --test --test-timeout=120000 \"test/unit/**/*.test.ts\"",
     "test:mod": "node --input-type=module -e \"import { spawn } from 'node:child_process'; const child = spawn('claude', ['plugin', 'test', 'plugins/multi-core'], { stdio: 'inherit', env: { ...process.env, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '1' } }); child.on('exit', (code) => { process.exitCode = code ?? 1; });\"",
-    "test:live:compaction": "node test/live/native-compaction.ts",
     "test:live:zen": "node test/live/native-zen.ts",
-    "test:live:cursor": "node test/live/native-cursor-harness.ts",
-    "test:live:auto-mode": "node test/live/native-auto-mode.ts",
-    "test:live:provider-approval": "node test/live/native-provider-approval.ts",
-    "test:live:reviewer": "node test/live/native-reviewer.ts",
-    "test:live:approval-worker": "node test/live/native-approval-worker.ts",
     "test:live:permissions": "node test/live/native-permissions.ts",
-    "test:live:antigravity": "node test/live/native-antigravity.ts",
     "format": "biome format --write .",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --write .",
@@ -36,7 +29,6 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@cursor/sdk": "1.0.31",
     "js-tiktoken": "1.0.21",
     "yaml": "2.9.0"
   }

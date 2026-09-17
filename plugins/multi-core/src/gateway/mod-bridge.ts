@@ -1,6 +1,6 @@
 import type { MessagesRequest } from './messages.ts';
 
-export type NativeRowKind = 'read' | 'search' | 'edit' | 'shell' | 'other' | 'note';
+type NativeRowKind = 'read' | 'search' | 'edit' | 'shell' | 'other' | 'note';
 export type NativeObservation =
   | { type: 'text'; text: string }
   | { type: 'started'; id: string; kind: NativeRowKind; description: string }
@@ -65,7 +65,7 @@ export class ModBridge {
   available(body: MessagesRequest) {
     const tools = new Set(body.tools?.map((tool) => tool.name));
     return ['read', 'search', 'edit', 'shell', 'other', 'note'].every((name) =>
-      tools.has(`mcp__multi-core__cursor_${name}`),
+      tools.has(`mcp__multi-core__display_${name}`),
     );
   }
 
@@ -127,7 +127,7 @@ export class ModBridge {
     const event: ModDisplayEvent = {
       sequence: ++this.sequence,
       toolUseId: observation.id,
-      tool: `mcp__multi-core__cursor_${action.kind}`,
+      tool: `mcp__multi-core__display_${action.kind}`,
       input: {
         description: action.description,
         output,

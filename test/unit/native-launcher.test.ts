@@ -11,7 +11,6 @@ import {
   checkLauncherArgumentLimit,
   workerDefinitions,
 } from '../../plugins/multi-core/src/launcher.ts';
-import { cursorModelOptions, cursorPickerOptions } from '../../plugins/multi-cursor/src/models.ts';
 import { ZEN_MODELS } from '../../plugins/multi-zen/src/models.ts';
 
 async function writeClaudeFixture(bin: string, source: string): Promise<void> {
@@ -369,152 +368,11 @@ result(JSON.stringify({settings,models:args.filter(x=>x.startsWith('multi/')),ze
   );
 });
 
-test('Antigravity launcher groups picker families, keeps workers and enables function hooks', async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-agy-picker-'));
-  t.after(() => rm(cwd, { recursive: true, force: true }));
-  const bin = path.join(cwd, 'bin');
-  await mkdir(bin);
-  if (process.platform === 'win32') {
-    await writeFile(
-      path.join(bin, 'agy-fixture.js'),
-      `if(process.argv[2] !== 'models') process.exit(9);
-const rows=[['gemini-low','Gemini Low'],['gemini-medium','Gemini Medium'],['gemini-high','Gemini High'],['sonnet-thinking','Sonnet Thinking']];
-console.log(rows.map(row=>row.join(String.fromCharCode(9))).join(String.fromCharCode(10)));
-`,
-    );
-    await writeFile(
-      path.join(bin, 'agy.cmd'),
-      // npm's global shim layout, so the launcher runs the fixture through Node directly.
-      `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\agy-fixture.js" %*\r\n`,
-    );
-  } else {
-    await writeFile(
-      path.join(bin, 'agy'),
-      `#!/usr/bin/env node
-if(process.argv[2] !== 'models') process.exit(9);
-const rows=[['gemini-low','Gemini Low'],['gemini-medium','Gemini Medium'],['gemini-high','Gemini High'],['sonnet-thinking','Sonnet Thinking']];
-console.log(rows.map(row=>row.join(String.fromCharCode(9))).join(String.fromCharCode(10)));
-`,
-      { mode: 0o755 },
-    );
-  }
-  await writeClaudeFixture(
-    bin,
-    `#!/usr/bin/env node
-const fs=require('node:fs'); const {execFileSync}=require('node:child_process'); const args=process.argv.slice(2);
-if(args.includes('plugin')&&args.includes('list')){console.log(process.env.TEST_PLUGIN==='enabled'?JSON.stringify([{id:'multi-core@cc-multi-cli-plugin',enabled:true,installPath:process.cwd()}]):'[]');process.exit(0)}
-if(args[0]==='--version'){console.log(process.env.TEST_CLAUDE_VERSION??'2.1.272');process.exit(0)}
-const result=(value)=>{const base=process.env.MULTI_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/multi/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-multi-gateway-token':process.env.MULTI_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
-if(args[0]==='auth'){console.log('{"loggedIn":false}');process.exit(1)}
-if(args.includes('plugin')){console.log('[]');process.exit(0)}
-const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'utf8'));
-const agents=JSON.parse(args[args.indexOf('--agents')+1]);
-if(process.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS !== '1') throw new Error('function hooks missing');
-result(JSON.stringify({settings,agents}));
-`,
-  );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
-  const custom = {
-    model: 'custom/model',
-    label: 'Keep me',
-    description: 'Unchanged',
-    behavesAs: 'claude-opus-4-6',
-  };
-  const { stdout } = await promisify(execFile)(
-    process.execPath,
-    [
-      launcher,
-      '--settings',
-      JSON.stringify({ modelPicker: { options: [custom] }, hooks: { Stop: [] } }),
-    ],
-    {
-      cwd,
-      timeout: 20000,
-      env: {
-        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-        HOME: cwd,
-        ...windowsHome(cwd),
-        CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
-        CODEX_HOME: cwd,
-        MULTI_ANTIGRAVITY: '1',
-      },
-    },
-  );
-  const { settings, agents } = JSON.parse(stdout);
-  const rows: { model: string; behavesAs: string }[] = settings.modelPicker.options;
-  assert.deepEqual(
-    rows.map(({ model }) => model),
-    ['multi/antigravity/gemini', 'multi/antigravity/sonnet-thinking', custom.model],
-  );
-  assert.equal(rows[0].behavesAs, 'claude-sonnet-4-6');
-  assert.deepEqual(rows[2], custom);
-  assert.deepEqual(settings.hooks.Stop, []);
-  for (const effort of ['low', 'medium', 'high']) {
-    assert.equal(agents[`antigravity-gemini-${effort}`].effort, effort);
-    assert.equal(
-      agents[`antigravity-gemini-${effort}`].model,
-      `multi/antigravity/gemini-${effort}`,
-    );
-  }
-  assert.equal(agents['antigravity-gemini'].model, rows[0].model);
-  const catalog = new AgentCatalog(
-    agents,
-    rows.map(({ model }) => model),
-  );
-  const listing = Object.entries(agents)
-    .map(([name, value]) => {
-      const worker = value as { description: string; tools: string[] };
-      return `- ${name}: ${worker.description} (Tools: ${worker.tools.join(', ')})`;
-    })
-    .join('\n');
-  const compacted = JSON.stringify(
-    catalog.compact({
-      messages: [
-        {
-          role: 'user',
-          content: `<system-reminder>\nAvailable agent types for the Agent tool:\n${listing}\n</system-reminder>`,
-        },
-      ],
-    }),
-  );
-  assert.match(compacted, /- antigravity-gemini:/);
-  assert.match(compacted, /- antigravity-sonnet-thinking:/);
-  assert.doesNotMatch(compacted, /antigravity-gemini-(low|medium|high):/);
-});
-
-test('launcher registers only Cursor picker workers and keeps the representative catalog under 30 KB', () => {
-  const cursor = cursorModelOptions(
-    ['default', 'grok-4.6', 'composer-2.5', 'catalog-only'].map((id) => ({
-      id,
-      displayName: id,
-      variants: [{ displayName: 'Default', isDefault: true, params: [] }],
-    })),
-  );
-  const picker = cursorPickerOptions(cursor);
-  const antigravity = [
-    'gemini',
-    'claude',
-    'gpt',
-    'sonnet',
-    'opus',
-    'flash',
-    'thinking',
-    'gemini-low',
-    'gemini-medium',
-    'gemini-high',
-  ].map((id) => ({
-    id,
-    model: `multi/antigravity/${id}`,
-    label: `Antigravity · ${id}`,
-    worker: `antigravity-${id}`,
-  }));
-  const agents = workerDefinitions(true, picker, true, antigravity);
+test('launcher registers Zen workers and keeps the representative catalog under 30 KB', () => {
+  const agents = workerDefinitions(true);
   const definitions = JSON.stringify(agents);
   const definitionBytes = Buffer.byteLength(definitions);
-  assert.equal(Object.keys(agents).filter((name) => name.startsWith('cursor-')).length, 3);
-  assert(!Object.keys(agents).some((name) => name.includes('catalog-only')));
+  assert(Object.keys(agents).every((name) => name.startsWith('zen-')));
   assert(definitionBytes < 30000, `representative worker JSON was ${definitionBytes} bytes`);
   assert.equal(ZEN_MODELS.length, 19);
 });

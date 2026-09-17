@@ -1,45 +1,46 @@
 import { getEncoding } from 'js-tiktoken';
-import type {
-  ResponsesInputContent,
-  ResponsesRequest,
-} from '../../../multi-openai/src/responses.ts';
+import type { ChatRequest } from '../../../multi-zen/src/chat.ts';
 
 let encoding: ReturnType<typeof getEncoding> | undefined;
 /** Shared local text estimate; providers may use different tokenizers. */
-export function estimateTextTokens(value: string): number {
+function estimateTextTokens(value: string): number {
   encoding ??= getEncoding('o200k_base');
   return encoding.encode(value, [], []).length;
 }
 
 /** Local estimate, not a provider billing count. Media expansion uses heuristics. */
-export function estimateInputTokens(request: ResponsesRequest): number {
+export function estimateInputTokens(request: ChatRequest): number {
   const text = estimateTextTokens;
-  // ponytail: media allowances are heuristic; replace with provider counting if the subscription endpoint exposes it.
-  const partTokens = (part: ResponsesInputContent): number => {
-    if (part.type === 'input_image') {
-      return 4096;
+  // ponytail: media allowances are heuristic; replace with provider counting when upstream exposes it.
+  const parts = (content: unknown): number => {
+    if (typeof content === 'string') {
+      return text(content);
     }
-    if (part.type === 'input_file') {
-      return Math.ceil((Buffer.byteLength(part.file_data) * 3) / 4);
+    if (!Array.isArray(content)) {
+      return 0;
     }
-    return text(part.text);
+    return content.reduce((total: number, part: { type?: string; text?: string }) => {
+      if (part.type === 'image_url') {
+        return total + 4096;
+      }
+      return total + text(part.text ?? '');
+    }, 0);
   };
-  const parts = (content: ResponsesInputContent[]) =>
-    content.reduce((total, part) => total + partTokens(part), 0);
-  let total = text(request.instructions) + text(JSON.stringify(request.tools)) + 8;
-  for (const item of request.input) {
+  let total = request.tools ? text(JSON.stringify(request.tools)) + 8 : 8;
+  for (const message of request.messages) {
     total += 8;
-    if ('role' in item) {
-      total += parts(item.content);
-    } else if (item.type === 'function_call') {
-      total += text(item.name) + text(item.arguments);
-    } else if (item.type === 'function_call_output') {
-      total += typeof item.output === 'string' ? text(item.output) : parts(item.output);
+    total += parts(message.content);
+    if ('reasoning_content' in message) {
+      total += text(message.reasoning_content ?? '');
     }
-    // Opaque reasoning is not text input; do not tokenize the ciphertext.
+    if ('tool_calls' in message) {
+      for (const call of message.tool_calls ?? []) {
+        total += text(call.function.name) + text(call.function.arguments);
+      }
+    }
   }
-  if (request.text) {
-    total += text(JSON.stringify(request.text));
+  if (request.response_format) {
+    total += text(JSON.stringify(request.response_format));
   }
   return total;
 }

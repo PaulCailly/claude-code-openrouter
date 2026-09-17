@@ -31,7 +31,7 @@ export interface ContentBlock {
   tool_name?: string;
 }
 
-export interface RequestMessage {
+interface RequestMessage {
   role: string;
   content: string | ContentBlock[];
 }
@@ -114,7 +114,7 @@ type BlockDelta =
   | { type: 'thinking_delta'; thinking: string }
   | { type: 'signature_delta'; signature: string };
 
-export type StreamEventName =
+type StreamEventName =
   | 'message_start'
   | 'content_block_start'
   | 'content_block_delta'

@@ -5,17 +5,10 @@ import { ModBridge } from '../../plugins/multi-core/src/gateway/mod-bridge.ts';
 import { PermissionModes } from '../../plugins/multi-core/src/gateway/mode-hook.ts';
 import { createNativeGateway } from '../../plugins/multi-core/src/gateway/server.ts';
 
-async function start(
-  t: test.TestContext,
-  permissionModes?: PermissionModes,
-  antigravity?: Parameters<typeof createNativeGateway>[0]['antigravity'],
-  guardAuto?: boolean,
-) {
+async function start(t: test.TestContext, permissionModes?: PermissionModes, guardAuto?: boolean) {
   const server = createNativeGateway({
     token: 'mod-token',
-    authFile: 'unused',
     permissionModes,
-    antigravity,
     guardAuto,
     modBridge: new ModBridge(),
   });
@@ -82,7 +75,7 @@ test('permission tool calls recover the same settings-admitted parent policy', a
     permissionMode: 'plan',
     cwd: '/workspace',
   });
-  const base = await start(t, modes, undefined, true);
+  const base = await start(t, modes, true);
   const recovered = await request(base, '/multi/permission', {
     hook_event_name: 'PreToolUse',
     session_id: 'recovered',
@@ -126,7 +119,7 @@ test('permission recovery keeps the parent absent until real policy admission co
 
 test('PermissionModes retains a tool-free compaction boundary and acknowledges workers', async () => {
   const modes = new PermissionModes(async () => ({
-    cursor: {
+    'zen-worker': {
       permissionMode: 'plan',
       tools: ['Read'],
       disallowedTools: ['Bash'],
@@ -139,7 +132,7 @@ test('PermissionModes retains a tool-free compaction boundary and acknowledges w
   assert.equal(compact.permissionMode, 'auto');
   assert.equal(typeof compact.compaction, 'string');
   const workerToken = await modes.prepareModWorker('session', {
-    subagentType: 'cursor',
+    subagentType: 'zen-worker',
     permissionMode: 'auto',
     cwd: '/workspace',
   });
@@ -204,7 +197,7 @@ test('mod routes reject browser origins, invalid methods and invalid worker iden
 test('display observations retain only bounded pending actions and lifecycle state', () => {
   const bridge = new ModBridge();
   const key = JSON.stringify(['s', 'worker']);
-  bridge.begin(key, 'multi/cursor/auto');
+  bridge.begin(key, 'multi/zen/glm-5.3');
   bridge.observe(key, { type: 'started', id: 'row', kind: 'read', description: 'file' });
   assert.equal(bridge.status(key)?.detail, 'file');
   const row = bridge.observe(key, { type: 'completed', id: 'row', text: 'result', error: false });
@@ -265,7 +258,7 @@ test('compaction core fallback authenticates generation and removes all native c
 
 test('worker route authenticates catalog and generation before child-start acknowledgement', async (t) => {
   const modes = new PermissionModes(async () => ({
-    worker: { model: 'multi/cursor/auto', tools: ['Read'] },
+    worker: { model: 'multi/zen/glm-5.3', tools: ['Read'] },
   }));
   const base = await start(t, modes);
   const generation = await admit(base);
@@ -321,52 +314,6 @@ test('model effort telemetry is scoped observation and cannot change policy', as
   );
   assert.deepEqual(telemetry.body, { model: 'multi/openai/gpt-6-astra', effort: 'high' });
   assert.deepEqual(modes.resolve('s'), before);
-});
-
-test('two-phase compaction invokes the native fixture once without tools or origin-state mutation', async (t) => {
-  const modes = new PermissionModes(async () => ({}));
-  let calls = 0;
-  const base = await start(t, modes, {
-    validate: () => 1,
-    handle: async (_body, scope, _signal, _emit, context) => {
-      calls++;
-      assert.deepEqual(context?.tools, []);
-      assert.equal(typeof context?.compaction, 'string');
-      assert.match(scope, /compact-/);
-      return {
-        id: 'summary',
-        type: 'message',
-        role: 'assistant',
-        model: 'multi/antigravity/model',
-        content: [{ type: 'text', text: 'fixture summary' }],
-        stop_reason: 'end_turn',
-        stop_sequence: null,
-        usage: { input_tokens: 1, output_tokens: 1 },
-      };
-    },
-  });
-  const generation = await admit(base);
-  const payload = {
-    sessionId: 's',
-    generation,
-    messages: [{ role: 'user', text: 'task', toolUses: [], handle: 'one' }],
-  };
-  const prepared = await request(base, '/multi/mod/compact/precompute', payload);
-  assert.equal(calls, 0);
-  const run = { sessionId: 's', generation, precomputeId: prepared.body.precomputeId };
-  assert.equal((await request(base, '/multi/mod/compact/run', run)).body.accepted, true);
-  await setImmediate();
-  await request(base, '/multi/mod/compact/run', run);
-  const result = await request(base, '/multi/mod/compact/authorize', payload);
-  assert.deepEqual(result.body.messages, [
-    { role: 'user', text: 'Conversation summary:\nfixture summary', toolUses: [] },
-  ]);
-  assert.equal(calls, 1);
-  assert.equal(
-    modes.resolve('s').compaction,
-    undefined,
-    'ready summary does not poison normal dispatch',
-  );
 });
 
 test('a prompt snapshot without a permission mode admits no policy but never blocks', async (t) => {

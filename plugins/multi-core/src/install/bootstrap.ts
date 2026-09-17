@@ -36,7 +36,6 @@ async function dispatch(state: Installation, args: string[], management: boolean
       : {}),
     MULTI_REAL_CLAUDE: state.claude,
     MULTI_ENABLED_PROVIDERS: providers.join(','),
-    MULTI_ANTIGRAVITY: providers.includes('antigravity') ? '1' : '0',
   };
   const entry = management ? 'account.ts' : 'launcher.ts';
   return run(state.node, [path.join(root, 'plugins', 'multi-core', 'src', entry), ...args], {

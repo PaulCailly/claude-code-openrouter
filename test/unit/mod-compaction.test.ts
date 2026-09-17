@@ -2,10 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import {
-  antigravityCompactionDenyList,
-  antigravityPermissionPolicy,
-} from '../../plugins/multi-antigravity/src/permissions.ts';
-import {
   ModCompactions,
   type SummaryRequest,
 } from '../../plugins/multi-core/src/gateway/mod-compaction.ts';
@@ -76,8 +72,6 @@ test('summary work receives zero native tool capabilities even under Bypass', as
   assert(captured);
   assert.deepEqual(captured.context.tools, []);
   assert.equal(captured.context.compaction, prepared.precomputeId);
-  const policy = antigravityPermissionPolicy(captured.context);
-  assert.deepEqual(new Set(policy.denied), new Set(antigravityCompactionDenyList()));
   await setImmediate();
 });
 

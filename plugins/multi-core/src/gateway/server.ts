@@ -4,32 +4,12 @@ import http from 'node:http';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import {
-  type AntigravityHarness,
-  AntigravityProviderError,
-} from '../../../multi-antigravity/src/harness.ts';
-import {
-  formatAntigravityQuota,
-  readAntigravityAccountStatus,
-} from '../../../multi-antigravity/src/quota.ts';
-import { CursorProviderError } from '../../../multi-cursor/src/errors.ts';
-import type { CursorHarness } from '../../../multi-cursor/src/harness.ts';
-import { formatCursorQuota, readCursorQuota } from '../../../multi-cursor/src/quota.ts';
-import { readCursorAccountUsage } from '../../../multi-cursor/src/usage.ts';
-import { CodexAuthError, codexRequest } from '../../../multi-openai/src/auth.ts';
-import { openaiInstructions } from '../../../multi-openai/src/instructions.ts';
-import { MODELS } from '../../../multi-openai/src/models.ts';
-import type { ResponsesRequest } from '../../../multi-openai/src/responses.ts';
-import { fromResponses, toResponses } from '../../../multi-openai/src/responses.ts';
-import { readCodexUsage } from '../../../multi-openai/src/usage.ts';
 import { validateZenKey } from '../../../multi-zen/src/auth.ts';
 import { fromChat } from '../../../multi-zen/src/chat.ts';
 import { zenRequest } from '../../../multi-zen/src/request.ts';
 import { formatZenQuota, readZenQuota } from '../../../multi-zen/src/usage.ts';
 import type { AgentCatalog } from './agent-catalog.ts';
 import { forAnthropic } from './anthropic.ts';
-import type { ApprovalContext, NativeApprovalBridge } from './approval.ts';
-import { approvalCwdForComparison, isApprovalRequest, parseApprovalRequest } from './approval.ts';
 import type { GatewayFetch } from './fetch.ts';
 import type { Emit, MessagesRequest, MessagesResponse, StopReason } from './messages.ts';
 import { ModBridge } from './mod-bridge.ts';
@@ -38,13 +18,12 @@ import { handleModRoute } from './mod-routes.ts';
 import type { PermissionContext, PermissionModes } from './mode-hook.ts';
 import type { PendingApprovalTool } from './permission-hook.ts';
 import { approvalCapabilityGuard } from './permission-hook.ts';
-import { codexQuotaView, ProviderUsageDashboard } from './provider-usage.ts';
+import { ProviderUsageDashboard } from './provider-usage.ts';
 import { ReceiptLedger } from './receipts.ts';
 import { estimateInputTokens } from './tokens.ts';
 import { forwardObservedTools, ToolObserver } from './tool-observer.ts';
 import { originalToolNames } from './tools.ts';
 
-const OPENAI_URL = 'https://chatgpt.com/backend-api/codex/responses';
 const ANTHROPIC_URL = 'https://api.anthropic.com';
 const MAX_BODY = 8 * 1024 * 1024;
 const STRIPPED_REQUEST_HEADERS = [
@@ -64,15 +43,7 @@ const STRIPPED_RESPONSE_HEADERS = [
 
 /** What the gateway reports to `onEvent`; routing only, never credentials or bodies. */
 export interface GatewayEvent {
-  route:
-    | 'anthropic'
-    | 'openai'
-    | 'openai-request'
-    | 'cursor'
-    | 'antigravity'
-    | 'approval'
-    | 'zen'
-    | 'zen-request';
+  route: 'anthropic' | 'zen' | 'zen-request';
   model?: string;
   agentId?: string | null;
   path?: string;
@@ -98,18 +69,11 @@ export interface GatewayOptions {
   usageDashboard?: ProviderUsageDashboard;
   token: string;
   enabledProviders?: readonly string[];
-  authFile: string;
   fetchImpl?: GatewayFetch;
   onEvent?: (event: GatewayEvent) => void;
   timeoutMs?: number;
-  cursor?: Pick<CursorHarness, 'validate' | 'handle'> &
-    Partial<Pick<CursorHarness, 'billedUsageForSession'>>;
-  antigravity?: Pick<AntigravityHarness, 'validate' | 'handle'>;
   zen?: { apiKey: string };
-  /** OpenAI review for GPT-originated actions, independent of Claude authentication. */
-  approvalBridge?: Pick<NativeApprovalBridge, 'respond'>;
-  approvalProviders?: readonly ('openai' | 'cursor')[];
-  /** No Anthropic credentials: also block passthrough if no reviewer is available. */
+  /** No Anthropic credentials: also block passthrough. */
   blockAnthropic?: boolean;
   guardAuto?: boolean;
   permissionModes?: PermissionModes;
@@ -122,9 +86,8 @@ class BadRequest extends Error {}
 class UpstreamFailure extends Error {
   status: number;
   retryAfter: string | null;
-  constructor(status: number, retryAfter: string | null, provider = 'OpenAI') {
-    const authHelp = provider === 'OpenAI' ? ' Renew the Codex login.' : ' Check the Zen API key.';
-    super(`${provider} returned HTTP ${status}.${status === 401 ? authHelp : ''}`);
+  constructor(status: number, retryAfter: string | null, provider = 'Zen') {
+    super(`${provider} returned HTTP ${status}.${status === 401 ? ' Check the Zen API key.' : ''}`);
     this.status = status;
     this.retryAfter = retryAfter;
   }
@@ -166,15 +129,10 @@ interface ProviderRequest {
 export function createNativeGateway({
   token,
   enabledProviders,
-  authFile,
   fetchImpl = fetch,
   onEvent: observer = () => {},
   timeoutMs,
-  cursor,
-  antigravity,
   zen,
-  approvalBridge,
-  approvalProviders = approvalBridge ? ['openai'] : [],
   blockAnthropic,
   guardAuto,
   permissionModes,
@@ -183,37 +141,11 @@ export function createNativeGateway({
   receipts = new ReceiptLedger(),
   usageDashboard,
 }: GatewayOptions): Server {
-  const billedUsage = cursor?.billedUsageForSession?.bind(cursor);
   const dashboard =
     usageDashboard ??
     new ProviderUsageDashboard({
-      enabled: (enabledProviders ?? ['openai', 'cursor', 'zen', 'antigravity']).filter(
-        (provider) => {
-          if (provider === 'cursor') {
-            return Boolean(cursor);
-          }
-          if (provider === 'zen') {
-            return Boolean(zen);
-          }
-          if (provider === 'antigravity') {
-            return Boolean(antigravity);
-          }
-          return provider === 'openai';
-        },
-      ),
-      openai: async () => codexQuotaView(await readCodexUsage(authFile)),
-      cursor: cursor
-        ? (session) =>
-            readCursorAccountUsage(
-              session,
-              async () => formatCursorQuota(await readCursorQuota()),
-              billedUsage,
-            )
-        : undefined,
+      enabled: (enabledProviders ?? ['zen']).filter(() => Boolean(zen)),
       zen: zen ? async () => formatZenQuota(await readZenQuota({ apiKey: zen.apiKey })) : undefined,
-      antigravity: antigravity
-        ? async () => formatAntigravityQuota(await readAntigravityAccountStatus())
-        : undefined,
     });
   const onEvent = (event: GatewayEvent) => {
     receipts.observe(event);
@@ -226,261 +158,17 @@ export function createNativeGateway({
     validateZenKey(zen.apiKey);
   }
   const fallbackSession = randomUUID();
-  const approvalContexts = new Map<string, ApprovalContext>();
   const pendingTools = new Map<string, PendingApprovalTool>();
-  const reviewCandidates = new Map<
-    string,
-    { tool: PendingApprovalTool; context: ApprovalContext }
-  >();
-  function nativeReviewSession(session: unknown) {
-    if (blockAnthropic || typeof session !== 'string' || !session) {
-      return false;
-    }
-    const contexts = [...approvalContexts.values()].filter(
-      (context) => JSON.parse(context.scope)[0] === session,
-    );
-    // Headerless worker reviews need origin matching only when this session has
-    // external execution. Native Claude owns its classifier format and retries.
-    return contexts.length > 0 && contexts.every((context) => !context.model.startsWith('multi/'));
-  }
-  const matchesBashAction = (
-    candidate: { tool: PendingApprovalTool; context: ApprovalContext },
-    action: unknown,
-  ) => {
-    if (
-      !isRecord(candidate.tool.input) ||
-      typeof candidate.tool.input.command !== 'string' ||
-      typeof action !== 'string'
-    ) {
-      return false;
-    }
-    if (candidate.tool.input.command === action) {
-      return true;
-    }
-    // Claude's classifier omits its redundant current-workspace `cd` prefix.
-    const cwd =
-      typeof candidate.context.cwd === 'string'
-        ? approvalCwdForComparison(candidate.context.cwd)
-        : undefined;
-    return (
-      cwd !== undefined &&
-      candidate.tool.input.command.replaceAll('\\', '/') === `cd ${cwd} && ${action}`
-    );
-  };
   function permissionHook(parsed: Record<string, unknown>) {
     const id = typeof parsed.tool_use_id === 'string' ? parsed.tool_use_id : '';
     const pending = pendingTools.get(id);
     pendingTools.delete(id);
-    if (
-      pending?.scope &&
-      pending.session === parsed.session_id &&
-      pending.name === parsed.tool_name &&
-      typeof parsed.cwd === 'string' &&
-      path.isAbsolute(parsed.cwd)
-    ) {
-      const context = approvalContexts.get(pending.scope);
-      if (context?.model === pending.model) {
-        evictOldest(reviewCandidates, 512);
-        reviewCandidates.set(id, { tool: pending, context: { ...context, cwd: parsed.cwd } });
-      }
-    }
-    if (nativeReviewSession(parsed.session_id)) {
-      return {};
-    }
-    return approvalCapabilityGuard(parsed, pending, approvalProviders, !blockAnthropic);
+    return approvalCapabilityGuard(parsed, pending, !blockAnthropic);
   }
-  function retainContext(
-    approvalScope: string,
-    external: string,
-    body: MessagesRequest,
-    identity: string | undefined,
-    agentId: string | undefined,
-  ) {
-    for (const [id, candidate] of reviewCandidates) {
-      if (candidate.context.scope === approvalScope) {
-        reviewCandidates.delete(id);
-      }
-    }
-    // Each worker retains its own current request; provider switches replace it.
-    approvalContexts.delete(approvalScope);
-    evictOldest(approvalContexts, 128);
-    approvalContexts.set(approvalScope, {
-      model: external,
-      request: body,
-      scope: approvalScope,
-      worker: Boolean(agentId),
-      rootRequest: agentId
-        ? approvalContexts.get(JSON.stringify([identity, 'main']))?.request
-        : undefined,
-    });
-  }
-  function pendingReview(parsed: Record<string, unknown>, sourceSession: string) {
-    const { action } = parseApprovalRequest(parsed);
-    const name = Object.keys(action)[0];
-    const candidates = [...reviewCandidates.values()].filter(
-      (candidate) =>
-        candidate.tool.session === sourceSession &&
-        candidate.tool.name === name &&
-        (name !== 'Bash' || matchesBashAction(candidate, action[name])),
-    );
-    if (candidates.length !== 1) {
-      throw new BadRequest('Missing or ambiguous pending review action');
-    }
-    return candidates[0].context;
-  }
-  const compactions = new ModCompactions(async (request) => {
-    const model = request.context.model;
-    const provider = model?.split('/')[1];
-    const harness = provider === 'cursor' ? cursor : undefined;
-    const native = provider === 'antigravity' ? antigravity : harness;
-    if (!native || !model) {
-      throw new Error('Precomputed summaries require a native harness model');
-    }
-    assertProviderEnabled(model, enabledProviders);
-    // Use a separate native record. A speculative summary never advances or rewinds
-    // the originating run and never receives native tool capabilities.
-    const result = await native.handle(
-      {
-        model,
-        max_tokens: 3000,
-        messages: [
-          {
-            role: 'user',
-            content: `Summarize this conversation for continuation. Preserve tasks, constraints, decisions and unresolved work. Do not execute tools. Instructions: ${request.instructions ?? ''}\n${JSON.stringify(request.messages)}`,
-          },
-        ],
-      },
-      JSON.stringify([request.session, `compact-${request.id}`]),
-      request.signal,
-      undefined,
-      request.context,
-    );
-    return result.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n');
+  const compactions = new ModCompactions(async () => {
+    throw new Error('Precomputed summaries require a native harness model');
   });
 
-  async function handleHarness(exchange: ProviderRequest, provider: 'cursor' | 'antigravity') {
-    const { res, body, url, signal, agentId, emit, identity } = exchange;
-    const bridge = { cursor, antigravity }[provider];
-    if (!bridge) {
-      const unavailable = {
-        cursor: 'Cursor SDK is not signed in. Run the launcher with --cursor-login first.',
-        antigravity:
-          'Antigravity is unavailable. Install and connect the multi-antigravity plugin.',
-      };
-      throw new BadRequest(unavailable[provider]);
-    }
-    const scope = identity.scope ?? JSON.stringify([fallbackSession, agentId ?? 'main']);
-    const nativeBody = exchange.body;
-    const inputTokens = validateHarness(exchange, provider, bridge);
-    if (url.pathname === '/v1/messages/count_tokens') {
-      res.writeHead(200, {
-        'content-type': 'application/json',
-        'x-multi-token-count': 'estimate',
-      });
-      return res.end(JSON.stringify({ input_tokens: inputTokens }));
-    }
-    exchange.startStream();
-    const displayRows = provider === 'cursor' && modBridge.available(nativeBody);
-    modBridge.begin(scope, body.model ?? provider);
-    const result = await bridge
-      .handle(
-        nativeBody,
-        scope,
-        signal,
-        body.stream ? emit : undefined,
-        exchange.permissionContext,
-        displayRows ? (observation) => modBridge.observe(scope, observation) : undefined,
-      )
-      .catch((error: unknown) => {
-        modBridge.complete(scope, signal.aborted ? 'cancelled' : 'failed');
-        throw error;
-      });
-    permissionModes?.finishModCompaction(
-      identity.session,
-      agentId,
-      exchange.permissionContext?.compaction,
-    );
-    rememberResult(exchange, result);
-    onEvent(
-      completionEvent(exchange, result, provider, provider === 'cursor' ? '@cursor/sdk' : 'agy'),
-    );
-    sendResult(exchange, result);
-    modBridge.complete(scope);
-  }
-  async function handleOpenAI(exchange: ProviderRequest, externalModel: string) {
-    const { req, res, body, url, signal, abort, agentId, emit } = exchange;
-    const request = openaiRequest(exchange, externalModel);
-    request.prompt_cache_key = createHash('sha256')
-      .update(
-        JSON.stringify([
-          'openai',
-          exchange.identity.session || fallbackSession,
-          agentId ?? 'main',
-          request.model,
-        ]),
-      )
-      .digest('hex');
-    if (url.pathname === '/v1/messages/count_tokens') {
-      res.writeHead(200, {
-        'content-type': 'application/json',
-        'x-multi-token-count': 'estimate',
-      });
-      return res.end(JSON.stringify({ input_tokens: estimateInputTokens(request) }));
-    }
-    const toolNames = originalToolNames(body);
-    onEvent({
-      route: 'openai-request',
-      agentId,
-      model: request.model,
-      effort: request.reasoning.effort,
-    });
-    const headers = {
-      'content-type': 'application/json',
-      accept: 'text/event-stream',
-      originator: 'cc_multi_native',
-      session_id: String(
-        agentId ?? header(req.headers['x-claude-code-session-id']) ?? fallbackSession,
-      ),
-    };
-    const upstream = await codexRequest(authFile, signal, (auth) =>
-      fetchImpl(OPENAI_URL, {
-        method: 'POST',
-        headers: { ...headers, ...auth },
-        body: JSON.stringify(request),
-        signal,
-        redirect: 'error',
-      }),
-    );
-    if (!upstream.ok) {
-      // Do not print upstream bodies or credentials in gateway diagnostics.
-      onEvent({ route: 'openai', status: upstream.status });
-      await upstream.body?.cancel();
-      throw new UpstreamFailure(upstream.status, upstream.headers.get('retry-after'));
-    }
-    if (!upstream.body) {
-      throw new Error('OpenAI returned no response stream.');
-    }
-    exchange.startStream();
-    const result = await fromResponses(
-      upstream.body,
-      externalModel,
-      body.stream ? emit : undefined,
-      { toolNames, stopSequences: body.stop_sequences, inputTokens: estimateInputTokens(request) },
-    );
-    rememberResult(exchange, result);
-    if (result.stop_reason === 'stop_sequence') {
-      abort.abort();
-    }
-    onEvent({
-      ...completionEvent(exchange, result, 'openai', 'responses'),
-      model: request.model,
-      effort: request.reasoning.effort,
-    });
-    sendResult(exchange, result);
-  }
   async function handleZen(exchange: ProviderRequest) {
     const { res, body, url, signal, agentId, emit } = exchange;
     if (!zen?.apiKey) {
@@ -521,8 +209,7 @@ export function createNativeGateway({
       requireUsage: true,
       inputTokens: prepared.inputTokens,
     };
-    const translate = prepared.endpoint === 'responses' ? fromResponses : fromChat;
-    const result = await translate(
+    const result = await fromChat(
       upstream.body,
       String(body.model),
       body.stream ? emit : undefined,
@@ -564,40 +251,6 @@ export function createNativeGateway({
       res.end();
     }
   }
-  async function handleReview(exchange: ProviderRequest, context: ApprovalContext | undefined) {
-    const { req, res, parsed, url, signal, agentId } = exchange;
-    if (!approvalBridge) {
-      throw new Error('Approval bridge unavailable');
-    }
-    if (url.pathname !== '/v1/messages' || req.method !== 'POST') {
-      throw new BadRequest('Anthropic passthrough is disabled');
-    }
-    const result = await approvalBridge.respond(parsed, signal, context);
-    const worker = context ? JSON.parse(context.scope)[1] : agentId;
-    onEvent({
-      route: 'approval',
-      model: result.message.model,
-      agentId: worker === 'main' ? null : (worker ?? null),
-      stage: result.stage,
-      outcome: result.outcome,
-      cached: result.cached,
-    });
-    res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify(result.message));
-  }
-  function retainRequestContext(
-    { body, url, req, agentId }: ProviderRequest,
-    { identity, scope }: ReturnType<typeof requestIdentity>,
-    external: string,
-  ) {
-    if ((!guardAuto && !approvalBridge) || !scope || !body.tools?.length) {
-      return;
-    }
-    if (url.pathname !== '/v1/messages' || req.method !== 'POST') {
-      return;
-    }
-    retainContext(scope, external, body, identity, agentId);
-  }
   async function sendPermissionDecision({ req, res, parsed }: ProviderRequest) {
     if (req.method !== 'POST') {
       throw new BadRequest('Permission hook requires POST');
@@ -619,43 +272,10 @@ export function createNativeGateway({
     metadata: ReturnType<typeof requestIdentity>,
     external: string | null,
   ) {
-    const { parsed } = exchange;
-    const classification = isApprovalRequest(parsed);
-    if (classification) {
-      if (!external && nativeReviewSession(metadata.session)) {
-        return handleAnthropic(exchange);
-      }
-      return dispatchReview(exchange, metadata, external);
-    }
-    retainRequestContext(exchange, metadata, String(exchange.body.model ?? ''));
     if (!external && blockAnthropic) {
       throw new BadRequest('Anthropic is not signed in. Select an external model.');
     }
     return forwardProvider(exchange, external);
-  }
-  async function dispatchReview(
-    exchange: ProviderRequest,
-    metadata: ReturnType<typeof requestIdentity>,
-    external: string | null,
-  ) {
-    // Native classification may omit the worker header or retry with a working
-    // model ID. The pending action, not that ID or the current parent, owns review.
-    let context = metadata.scope ? approvalContexts.get(metadata.scope) : undefined;
-    if (guardAuto) {
-      context = pendingReview(exchange.parsed, metadata.session);
-    }
-    const openai = context?.model.startsWith('multi/openai/');
-    if (approvalBridge && (openai || (!guardAuto && !context))) {
-      return handleReview(exchange, context);
-    }
-    const nativeClaude =
-      context && (!context.model.startsWith('multi/') || context.model.startsWith('multi/zen/'));
-    if (openai || external || blockAnthropic || (context && !nativeClaude)) {
-      throw new BadRequest(
-        'Automatic review cannot use ordinary external inference. No matching provider reviewer is enabled.',
-      );
-    }
-    return handleAnthropic(exchange);
   }
   function completionEvent(
     exchange: ProviderRequest,
@@ -694,19 +314,7 @@ export function createNativeGateway({
     const { body, agentId, url } = exchange;
     const route = providerRoute(external);
     beginUsage(exchange, external);
-    let permissionContext: PermissionContext | undefined;
-    if (
-      permissionModes &&
-      ['cursor', 'antigravity'].includes(route) &&
-      url.pathname === '/v1/messages'
-    ) {
-      try {
-        permissionContext = permissionModes.resolve(exchange.identity.session, agentId);
-        exchange.permissionContext = permissionContext;
-      } catch (error) {
-        throw new BadRequest(reason(error));
-      }
-    }
+    const permissionContext: PermissionContext | undefined = undefined;
     onEvent({
       route,
       model: body.model,
@@ -717,13 +325,7 @@ export function createNativeGateway({
     if (!external) {
       return handleAnthropic(exchange);
     }
-    if (route === 'cursor' || route === 'antigravity') {
-      return handleHarness(exchange, route);
-    }
-    if (external.startsWith('multi/zen/')) {
-      return handleZen(exchange);
-    }
-    return handleOpenAI(exchange, external);
+    return handleZen(exchange);
   }
   return http.createServer(async (req, res) => {
     const abort = new AbortController();
@@ -772,7 +374,7 @@ export function createNativeGateway({
           permissionModes,
           compactions,
           receipts,
-          billedUsage,
+          undefined,
           dashboard,
         );
       }
@@ -826,14 +428,8 @@ export function createNativeGateway({
 class RequestTooLarge extends Error {}
 
 function providerSignal(disconnected: AbortSignal, model: string | null, timeoutMs?: number) {
-  // Native harness runs follow the client connection rather than an HTTP deadline.
-  if (model?.startsWith('multi/cursor/') || model?.startsWith('multi/antigravity/')) {
-    return disconnected;
-  }
-  if (
-    (model?.startsWith('multi/openai/') || model?.startsWith('multi/zen/')) &&
-    timeoutMs === undefined
-  ) {
+  // Direct provider runs follow the client connection rather than an HTTP deadline.
+  if (model?.startsWith('multi/zen/') && timeoutMs === undefined) {
     return disconnected;
   }
   return AbortSignal.any([disconnected, AbortSignal.timeout(timeoutMs ?? 180000)]);
@@ -859,38 +455,19 @@ async function readRequest(req: http.IncomingMessage, catalog?: AgentCatalog) {
   if (!isRecord(parsed) || (parsed.model !== undefined && typeof parsed.model !== 'string')) {
     throw new BadRequest('Expected an object with a string model');
   }
-  const body: MessagesRequest = isApprovalRequest(parsed)
-    ? parsed
-    : (catalog?.compact(parsed) ?? parsed);
+  const body: MessagesRequest = catalog?.compact(parsed) ?? parsed;
   return { raw: body === parsed ? raw : Buffer.from(JSON.stringify(body)), parsed, body };
 }
 
-function providerRoute(
-  model: string | null,
-): 'cursor' | 'antigravity' | 'openai' | 'anthropic' | 'zen' {
-  if (model?.startsWith('multi/cursor/')) {
-    return 'cursor';
-  }
-  if (model?.startsWith('multi/antigravity/')) {
-    return 'antigravity';
-  }
-  if (model?.startsWith('multi/zen/')) {
-    return 'zen';
-  }
-  return model ? 'openai' : 'anthropic';
+function providerRoute(model: string | null): 'anthropic' | 'zen' {
+  return model?.startsWith('multi/zen/') ? 'zen' : 'anthropic';
 }
 function errorStatus(error: unknown): number {
-  if (error instanceof CodexAuthError) {
-    return 401;
-  }
   if (error instanceof BadRequest) {
     return 400;
   }
   if (error instanceof UpstreamFailure) {
     return error.status;
-  }
-  if (error instanceof CursorProviderError || error instanceof AntigravityProviderError) {
-    return error.failure.status;
   }
   return 502;
 }
@@ -973,26 +550,6 @@ function prepareZenRequest(exchange: ProviderRequest, fallbackSession: string) {
       )
       .digest('hex');
     return { ...zenRequest(body, cacheKey), cacheKey };
-  } catch (error) {
-    throw new BadRequest(reason(error));
-  }
-}
-
-function openaiRequest(exchange: ProviderRequest, externalModel: string): ResponsesRequest {
-  const { req, body, url } = exchange;
-  try {
-    const model = Object.values(MODELS).find((model) => externalModel === `multi/openai/${model}`);
-    if (!model) {
-      throw new Error('Unknown native OpenAI model');
-    }
-    if (
-      !['/v1/messages', '/v1/messages/count_tokens'].includes(url.pathname) ||
-      req.method !== 'POST'
-    ) {
-      throw new Error('External models require POST /v1/messages or /v1/messages/count_tokens');
-    }
-    const request = toResponses(body, model);
-    return { ...request, instructions: openaiInstructions(request.instructions) };
   } catch (error) {
     throw new BadRequest(reason(error));
   }
@@ -1100,21 +657,4 @@ function assertProviderEnabled(model: string | null, enabled: readonly string[] 
 
 function externalModel(model: unknown) {
   return typeof model === 'string' && model.startsWith('multi/') ? model : null;
-}
-function validateHarness(
-  exchange: ProviderRequest,
-  provider: string,
-  bridge: NonNullable<GatewayOptions['cursor'] | GatewayOptions['antigravity']>,
-) {
-  try {
-    if (
-      !['/v1/messages', '/v1/messages/count_tokens'].includes(exchange.url.pathname) ||
-      exchange.req.method !== 'POST'
-    ) {
-      throw new Error(`${provider} requires POST /v1/messages or /v1/messages/count_tokens`);
-    }
-    return bridge.validate(exchange.body, exchange.permissionContext);
-  } catch (error) {
-    throw new BadRequest(reason(error));
-  }
 }

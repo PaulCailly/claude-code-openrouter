@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { mergeCursorPermissions } from '../../../multi-cursor/src/permissions.ts';
 import type { WorkerPermissions } from './agent-definitions.ts';
 import { ModPolicies } from './mod-policy.ts';
 
@@ -73,7 +72,7 @@ export class PermissionModes {
     const policy = this.policies.consume(session, generation, requiredString(context.cwd, 'cwd'));
     remember(this.catalogs, policy.cwd, policy.workers);
     this.recordModSession(session, {
-      ...mergeCursorPermissions(context, policy.restrictions),
+      ...mergeWorkerPermissions(context, policy.restrictions),
       nativePermissionError: policy.restrictions.nativePermissionError,
     });
   }
@@ -332,7 +331,7 @@ export class PermissionModes {
       throw new Error('Claude worker permission context is unavailable');
     }
     const inherited = ['auto', 'acceptEdits', 'bypassPermissions'].includes(parent.permissionMode);
-    return mergeCursorPermissions(
+    return mergeWorkerPermissions(
       {
         ...worker,
         nativePermissionError: worker.nativePermissionError ?? parent.nativePermissionError,
@@ -352,4 +351,20 @@ function remember<T>(entries: Map<string, T>, key: string, value: T): void {
     throw new Error('Claude permission context limit reached; restart the gateway');
   }
   entries.set(key, value);
+}
+
+/** Intersect a worker's tool rules with the prompt-time context. */
+function mergeWorkerPermissions(
+  context: PermissionContext,
+  rules: WorkerPermissions = {},
+): PermissionContext {
+  let tools = context.tools;
+  if (rules.tools !== undefined) {
+    tools = tools === undefined ? rules.tools : tools.filter((tool) => rules.tools?.includes(tool));
+  }
+  return {
+    ...context,
+    tools,
+    disallowedTools: [...(context.disallowedTools ?? []), ...(rules.disallowedTools ?? [])],
+  };
 }

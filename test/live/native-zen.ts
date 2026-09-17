@@ -12,7 +12,7 @@ import {
   createNativeGateway,
   type GatewayOptions,
 } from '../../plugins/multi-core/src/gateway/server.ts';
-import { readSse } from '../../plugins/multi-openai/src/responses.ts';
+import { readSse } from '../../plugins/multi-core/src/gateway/sse.ts';
 import { readZenKey } from '../../plugins/multi-zen/src/auth.ts';
 import { zenModel, zenPickerOptions } from '../../plugins/multi-zen/src/models.ts';
 import { isolatedEnvironment } from './environment.ts';
@@ -254,7 +254,6 @@ function createGateway() {
   };
   const options: GatewayOptions = {
     token: gatewayToken,
-    authFile: path.join(artifacts, 'unused-codex-auth.json'),
     blockAnthropic: true,
     zen: { apiKey },
     fetchImpl,

@@ -4,7 +4,7 @@ import { ReceiptLedger } from '../../plugins/multi-core/src/gateway/receipts.ts'
 import type { GatewayEvent } from '../../plugins/multi-core/src/gateway/server.ts';
 
 const completion: GatewayEvent = {
-  route: 'openai',
+  route: 'zen',
   endpoint: 'responses',
   session: 'session-1',
   agentId: 'worker-7',

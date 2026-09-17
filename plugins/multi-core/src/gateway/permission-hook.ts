@@ -21,20 +21,10 @@ export interface PendingApprovalTool {
   input: unknown;
   scope?: string;
 }
-function providerFor(model: string | undefined): 'openai' | 'cursor' | undefined {
-  if (model?.startsWith('multi/openai/')) {
-    return 'openai';
-  }
-  if (model?.startsWith('multi/cursor/')) {
-    return 'cursor';
-  }
-  return undefined;
-}
 /** Capability guard only: no command parsing, model review, or permission grants. */
 export function approvalCapabilityGuard(
   input: unknown,
   pending: PendingApprovalTool | undefined,
-  available: readonly ('openai' | 'cursor')[],
   anthropic = false,
 ) {
   if (
@@ -53,12 +43,8 @@ export function approvalCapabilityGuard(
     'tool_name' in input &&
     pending.session === input.session_id &&
     pending.name === input.tool_name;
-  const provider = providerFor(pending?.model);
-  const nativeClaude =
-    anthropic &&
-    pending &&
-    (!pending.model.startsWith('multi/') || pending.model.startsWith('multi/zen/'));
-  if (known && (nativeClaude || (provider && available.includes(provider)))) {
+  // Claude executes every tool here, so auto mode needs Claude's own review.
+  if (known && anthropic) {
     return {};
   }
   if (known) {
@@ -67,7 +53,7 @@ export function approvalCapabilityGuard(
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
         permissionDecisionReason:
-          'Auto mode is unavailable for this provider. Select a supported provider or change the permission mode before continuing.',
+          'Auto mode needs Claude review, which is unavailable without Anthropic access. Change the permission mode before continuing.',
       },
     };
   }

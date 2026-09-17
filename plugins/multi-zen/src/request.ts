@@ -1,28 +1,28 @@
-import type { MessagesRequest } from '../../multi-core/src/gateway/messages.ts';
-import { estimateInputTokens, estimateTextTokens } from '../../multi-core/src/gateway/tokens.ts';
-import type { ResponsesInputContent, ResponsesRequest } from '../../multi-openai/src/responses.ts';
-import { toResponses } from '../../multi-openai/src/responses.ts';
+import type { ContentBlock, MessagesRequest } from '../../multi-core/src/gateway/messages.ts';
+import { estimateInputTokens } from '../../multi-core/src/gateway/tokens.ts';
 import { toChat } from './chat.ts';
 import type { ZenModel } from './models.ts';
 import { zenModel } from './models.ts';
 
-function validateMedia(request: ResponsesRequest, model: ZenModel) {
-  const check = (part: ResponsesInputContent) => {
-    if (part.type === 'input_image' && !model.images) {
+function validateMedia(body: MessagesRequest, model: ZenModel) {
+  const check = (block: ContentBlock) => {
+    if (block.type === 'image' && !model.images) {
       throw new Error(`${model.id} does not support images in this integration`);
     }
-    if (part.type === 'input_file' && !model.documents) {
-      throw new Error(`${model.id} does not support PDF attachments in this integration`);
+    if (block.type === 'document') {
+      throw new Error(`${model.id} does not accept PDF input in this integration`);
     }
   };
-  for (const item of request.input) {
-    if ('role' in item) {
-      for (const part of item.content) {
-        check(part);
-      }
-    } else if (item.type === 'function_call_output' && Array.isArray(item.output)) {
-      for (const part of item.output) {
-        check(part);
+  for (const message of body.messages ?? []) {
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+    for (const block of message.content) {
+      check(block);
+      if (block.type === 'tool_result' && Array.isArray(block.content)) {
+        for (const part of block.content) {
+          check(part);
+        }
       }
     }
   }
@@ -42,40 +42,22 @@ export function zenRequest(body: MessagesRequest, cacheKey: string) {
   ) {
     throw new Error(`Zen max_tokens must be between 1 and ${model.maxOutputTokens}`);
   }
-  const signaturePrefix = `multi-zen-responses:${model.id}:`;
-  const normalized = toResponses(body, model.id, signaturePrefix);
-  validateMedia(normalized, model);
+  validateMedia(body, model);
   const effort = body.output_config?.effort;
   if (effort !== undefined && model.efforts && !model.efforts.some((value) => value === effort)) {
     throw new Error(
       `${model.id} does not support effort ${effort}. Reset /effort to auto to use its native default.`,
     );
   }
-  const common = { signaturePrefix, inputTokens: estimateInputTokens(normalized) };
-  if (model.protocol === 'chat') {
-    // Claude supplies an effort even for models with no adjustable effort. These
-    // catalog entries explicitly use native reasoning, with no effort presets.
-    const chat = toChat({ ...body, max_tokens: body.max_tokens ?? 32000 }, model.id);
-    const reasoningTokens = chat.messages.reduce(
-      (total, message) =>
-        total +
-        ('reasoning_content' in message ? estimateTextTokens(message.reasoning_content ?? '') : 0),
-      0,
-    );
-    return {
-      ...common,
-      inputTokens: common.inputTokens + reasoningTokens,
-      endpoint: 'chat/completions' as const,
-      body: chat,
-    };
-  }
+  const chat = toChat(
+    { ...body, max_tokens: body.max_tokens ?? Math.min(32000, model.maxOutputTokens) },
+    model.id,
+  );
   return {
-    ...common,
-    endpoint: 'responses' as const,
-    body: {
-      ...normalized,
-      max_output_tokens: body.max_tokens ?? Math.min(32000, model.maxOutputTokens),
-      prompt_cache_key: cacheKey,
-    },
+    signaturePrefix: `multi-zen-chat:${model.id}:`,
+    inputTokens: estimateInputTokens(chat),
+    endpoint: 'chat/completions' as const,
+    body: chat,
+    cacheKey,
   };
 }

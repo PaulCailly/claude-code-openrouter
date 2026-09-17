@@ -70,30 +70,7 @@ async function main() {
   if (command === 'connect' && provider === 'zen' && args.length === 0) {
     return connectZen();
   }
-  if (command !== 'login') {
-    throw new Error(
-      'Usage: multi status | login openai [--device-auth] | login cursor | connect zen | login antigravity | uninstall',
-    );
-  }
-  if (provider === 'openai' && args.every((arg) => arg === '--device-auth')) {
-    return run('codex', ['-c', 'cli_auth_credentials_store="file"', 'login', ...args]);
-  }
-  if (args.length) {
-    throw new Error('Unsupported login arguments');
-  }
-  if (provider === 'cursor') {
-    return run(process.execPath, [
-      fileURLToPath(new URL('./launcher.ts', import.meta.url)),
-      '--cursor-login',
-    ]);
-  }
-  if (provider === 'antigravity') {
-    return run(process.execPath, [
-      fileURLToPath(new URL('./launcher.ts', import.meta.url)),
-      '--antigravity-setup',
-    ]);
-  }
-  throw new Error('Zen uses multi connect zen, not OAuth login.');
+  throw new Error('Usage: multi status | connect zen | uninstall');
 }
 
 // Browser links are emitted by the provider-owned login process. Never read tokens.

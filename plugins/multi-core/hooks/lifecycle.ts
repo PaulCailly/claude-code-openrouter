@@ -14,13 +14,6 @@ export const register: Register = (on) => {
   on('turn.step', async function* ($, event, next) {
     // Observability only: forward every core chunk unchanged, without serving inference.
     const key = event.agentId ?? 'main';
-    const native =
-      event.model.startsWith('multi/cursor/') || event.model.startsWith('multi/antigravity/');
-    if (native && !running.has(key) && running.size < 128) {
-      const token = {};
-      running.set(key, token);
-      void poll($, event.agentId, () => running.get(key) === token);
-    }
     void postStep($, event);
     return yield* next(event);
   });

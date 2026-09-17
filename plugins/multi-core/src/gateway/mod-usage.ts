@@ -67,11 +67,11 @@ export async function usageRoute(
     if (!billedUsage) {
       return {
         status: 'unavailable',
-        message: 'Cursor billed usage is unavailable in this session.',
+        message: 'Provider billed usage is unavailable in this session.',
       };
     }
     return {
-      scope: 'Cursor native agent lifetime; local billing entries are per turn',
+      scope: 'Native agent lifetime; local billing entries are per turn',
       currency: 'USD',
       costUnit: 'cents',
       agents: await billedUsage(session),
