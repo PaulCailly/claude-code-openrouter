@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import type { ServerResponse } from 'node:http';
-import { readSse } from '../../../multi-openai/src/responses.ts';
+import { readSse } from './sse.ts';
 
 interface Tool {
   id: string;

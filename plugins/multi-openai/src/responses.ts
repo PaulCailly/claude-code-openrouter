@@ -1,4 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
+import type { Effort } from '../../multi-core/src/gateway/effort.ts';
+import { EFFORTS } from '../../multi-core/src/gateway/effort.ts';
 import type {
   ContentBlock,
   Emit,
@@ -7,7 +9,12 @@ import type {
   ResponseContentBlock,
   StopReason,
 } from '../../multi-core/src/gateway/messages.ts';
+import { prefixSafeLength, readSse } from '../../multi-core/src/gateway/sse.ts';
 import { callId, toolName } from '../../multi-core/src/gateway/tools.ts';
+
+export { forAnthropic } from '../../multi-core/src/gateway/anthropic.ts';
+export { EFFORTS, type Effort } from '../../multi-core/src/gateway/effort.ts';
+export { prefixSafeLength, readSse } from '../../multi-core/src/gateway/sse.ts';
 
 // Anthropic Messages <-> OpenAI Responses, for native Claude Code workers.
 const SIGNATURE_PREFIX = 'multi-openai:';
@@ -17,9 +24,6 @@ const IMAGE_MEDIA_TYPES: readonly unknown[] = [
   'image/gif',
   'image/webp',
 ];
-const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
-
-export type Effort = (typeof EFFORTS)[number];
 
 // ---------------------------------------------------------------------------
 // OpenAI Responses, as the gateway sends and reads them.
@@ -252,27 +256,6 @@ function isEffort(value: string): value is Effort {
 }
 
 // Only rewrite Claude-bound history when it contains our provider's opaque state.
-export function forAnthropic(body: MessagesRequest): MessagesRequest {
-  let changed = false;
-  const messages = body.messages
-    ?.map((message) => {
-      if (message.role !== 'assistant' || !Array.isArray(message.content)) {
-        return message;
-      }
-      const content = message.content.filter((block) => {
-        const foreign =
-          block.type === 'thinking' &&
-          [SIGNATURE_PREFIX, 'multi-zen-responses:', 'multi-zen-chat:'].some((prefix) =>
-            block.signature?.startsWith(prefix),
-          );
-        changed ||= Boolean(foreign);
-        return !foreign;
-      });
-      return { ...message, content };
-    })
-    .filter((message) => !Array.isArray(message.content) || message.content.length);
-  return changed ? { ...body, messages } : body;
-}
 
 function blocks(value: unknown): ContentBlock[] {
   if (typeof value === 'string') {
@@ -652,65 +635,6 @@ export function toResponses(
     store: false,
     stream: true,
   };
-}
-
-export async function* readSse(stream: AsyncIterable<Uint8Array>): AsyncGenerator<unknown> {
-  const decoder = new TextDecoder();
-  let pending = '';
-  let data: string[] = [];
-  let dataBytes = 0;
-  let totalBytes = 0;
-  const addData = (line: string) => {
-    dataBytes += Buffer.byteLength(line);
-    if (dataBytes > 8 * 1024 * 1024) {
-      throw new Error('OpenAI SSE event exceeds 8 MiB');
-    }
-    data.push(line);
-  };
-  const parse = (): unknown => {
-    const value = data.join('\n');
-    if (Buffer.byteLength(value) > 8 * 1024 * 1024) {
-      throw new Error('OpenAI SSE event exceeds 8 MiB');
-    }
-    data = [];
-    dataBytes = 0;
-    return value && value !== '[DONE]' ? JSON.parse(value) : null;
-  };
-  const consumeLine = (line: string): unknown => {
-    if (!line) {
-      return parse();
-    }
-    if (line.startsWith('data:')) {
-      addData(line.slice(5).replace(/^ /, ''));
-    }
-    return null;
-  };
-  for await (const chunk of stream) {
-    totalBytes += chunk.byteLength;
-    if (totalBytes > 32 * 1024 * 1024) {
-      throw new Error('OpenAI response exceeds 32 MiB');
-    }
-    pending += decoder.decode(chunk, { stream: true });
-    if (Buffer.byteLength(pending) > 8 * 1024 * 1024) {
-      throw new Error('OpenAI SSE buffer exceeds 8 MiB');
-    }
-    for (let index = pending.indexOf('\n'); index !== -1; index = pending.indexOf('\n')) {
-      const line = pending.slice(0, index).replace(/\r$/, '');
-      pending = pending.slice(index + 1);
-      const event = consumeLine(line);
-      if (event) {
-        yield event;
-      }
-    }
-  }
-  pending += decoder.decode();
-  if (pending.startsWith('data:')) {
-    addData(pending.slice(5).trimStart());
-  }
-  const event = parse();
-  if (event) {
-    yield event;
-  }
 }
 
 interface OutputSlot {
@@ -1117,19 +1041,6 @@ class ResponseStream {
       this.cursor++;
     }
   }
-}
-
-/** Hold suffixes that might become a stop sequence in a later text delta. */
-export function prefixSafeLength(text: string, stops: readonly string[]): number {
-  let limit = text.length;
-  for (const stop of stops) {
-    for (let length = 1; length < stop.length; length++) {
-      if (text.endsWith(stop.slice(0, length))) {
-        limit = Math.min(limit, text.length - length);
-      }
-    }
-  }
-  return limit;
 }
 
 export async function fromResponses(

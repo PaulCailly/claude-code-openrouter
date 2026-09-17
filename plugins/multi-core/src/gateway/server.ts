@@ -20,13 +20,14 @@ import { CodexAuthError, codexRequest } from '../../../multi-openai/src/auth.ts'
 import { openaiInstructions } from '../../../multi-openai/src/instructions.ts';
 import { MODELS } from '../../../multi-openai/src/models.ts';
 import type { ResponsesRequest } from '../../../multi-openai/src/responses.ts';
-import { forAnthropic, fromResponses, toResponses } from '../../../multi-openai/src/responses.ts';
+import { fromResponses, toResponses } from '../../../multi-openai/src/responses.ts';
 import { readCodexUsage } from '../../../multi-openai/src/usage.ts';
 import { validateZenKey } from '../../../multi-zen/src/auth.ts';
 import { fromChat } from '../../../multi-zen/src/chat.ts';
 import { zenRequest } from '../../../multi-zen/src/request.ts';
 import { formatZenQuota, readZenQuota } from '../../../multi-zen/src/usage.ts';
 import type { AgentCatalog } from './agent-catalog.ts';
+import { forAnthropic } from './anthropic.ts';
 import type { ApprovalContext, NativeApprovalBridge } from './approval.ts';
 import { approvalCwdForComparison, isApprovalRequest, parseApprovalRequest } from './approval.ts';
 import type { GatewayFetch } from './fetch.ts';

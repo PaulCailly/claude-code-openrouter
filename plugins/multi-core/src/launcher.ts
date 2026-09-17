@@ -26,7 +26,6 @@ import { CursorWorkspaces } from '../../multi-cursor/src/workspaces.ts';
 import { createOpenAIApproval, discoverOpenAIReviewer } from '../../multi-openai/src/approval.ts';
 import { readCodexAuth } from '../../multi-openai/src/auth.ts';
 import { MODELS, OPENAI_WORKERS } from '../../multi-openai/src/models.ts';
-import type { Effort } from '../../multi-openai/src/responses.ts';
 import { readZenKey } from '../../multi-zen/src/auth.ts';
 import { ZEN_MODELS, ZEN_WORKERS, zenPickerOptions } from '../../multi-zen/src/models.ts';
 import { AgentCatalog } from './gateway/agent-catalog.ts';
@@ -36,6 +35,7 @@ import {
   pluginPermissions,
 } from './gateway/agent-definitions.ts';
 import { checkCursorSettings } from './gateway/cursor-settings.ts';
+import type { Effort } from './gateway/effort.ts';
 import { executableInvocation, resolveExecutable } from './gateway/executable.ts';
 import { ModBridge } from './gateway/mod-bridge.ts';
 import { PermissionModes } from './gateway/mode-hook.ts';
