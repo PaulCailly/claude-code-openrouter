@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest a provider integration or gateway improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for a provider integration, model/worker choice, permission mapping, or session improvement.
+        Current integrations are OpenAI, Cursor, OpenCode Zen, and Antigravity.
+        Describe the execution route you need: Claude-executed tools or the provider's native harness.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like to add or change?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why? (concrete use case)
+      description: What task can't you do today that this would unblock?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered

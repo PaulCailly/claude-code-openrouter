@@ -1,0 +1,81 @@
+# Contributor guide
+
+## Orientation
+
+Read [ARCHITECTURE.md](ARCHITECTURE.md) and [README.md](README.md) first. Setup
+and provider details live in [docs/installation.md](docs/installation.md),
+[docs/openai.md](docs/openai.md), [docs/cursor.md](docs/cursor.md),
+[docs/zen.md](docs/zen.md), [docs/antigravity.md](docs/antigravity.md),
+[docs/permissions.md](docs/permissions.md), and [docs/platform-support.md](docs/platform-support.md).
+`.agent/` is gitignored scratch space. It is never authoritative.
+
+## Code map
+
+| Path | Responsibility |
+| --- | --- |
+| `plugins/multi-core/src/launcher.ts` | Launches the gateway and registers models and workers. |
+| `plugins/multi-core/src/gateway/server.ts` | Routes requests and manages sessions. |
+| `plugins/multi-core/src/gateway/messages.ts`, `fetch.ts`, `tools.ts` | Shared protocol, outbound fetch, and tool aliases. |
+| `plugins/multi-core/src/gateway/executable.ts`, `process-tree.ts` | Resolves executables and manages child processes. |
+| `plugins/multi-core/src/gateway/atomic-write.ts`, `state-lock.ts` | Protects files and serializes native state. |
+| `plugins/multi-core/src/gateway/cursor-settings.ts`, `mode-hook.ts`, `agent-definitions.ts` | Admits settings and maps prompt and worker permissions. |
+| `plugins/multi-core/src/gateway/approval.ts`, `permission-hook.ts` | Approval protocol and capability checks. |
+| `plugins/multi-core/src/gateway/mod-*.ts`, `tool-observer.ts` | Claude Mods control-plane routes, compaction, policy, and progress observation. |
+| `plugins/multi-core/src/account.ts`, `setup.ts`, `install/` | Accounts, bootstrap, plugin discovery, and installation. |
+| `plugins/multi-openai/src/` | Codex authentication, models, Responses translation, instructions, and reviewer. |
+| `plugins/multi-cursor/src/` | Cursor SDK harness, permissions, progress, requests, models, and workspaces. |
+| `plugins/multi-zen/src/` | Zen API-key authentication, catalogs, requests, and translations. |
+| `plugins/multi-antigravity/src/` | `agy` CLI harness, models, hooks, requests, and permissions. |
+| `test/unit/` | Offline unit tests for gateway and provider behavior. |
+| `test/live/` | Opt-in checks against native CLIs and provider services. |
+| `scripts/` | Development utilities, including banner generation. |
+| `.github/workflows/ci.yml` | Runs `npm run check` on Node 24 across Linux, macOS, and Windows. |
+| `package.json`, `biome.json`, `knip.json` | Scripts, lint rules, and entry/project analysis. |
+
+Keep provider authentication and catalogs in provider folders. Keep shared protocol
+types and cross-provider helpers in `plugins/multi-core/src/gateway/`. Import
+concrete modules directly. Do not add barrel re-exports. Platform-dependent code
+accepts an explicit `platform` option so every branch is unit-testable on Linux.
+
+## Product rules
+
+- Claude's permission mode controls every provider at prompt boundaries.
+- Each provider owns its login, reviewer, execution state, and credentials.
+- Fail explicitly on unsupported modes, unknown workers, ambiguous ownership, or missing review.
+- Never replay external tool events as executable Claude tools.
+- Native state is never rewound, and uncertain actions are never rerun blindly.
+- Antigravity native children and MCP are denied.
+- New bridges isolate session, worker, provider, and workspace state.
+- Do not use Cursor Fast in development or live tests; set `fast:false` explicitly.
+- Keep paid probes bounded and reuse existing usage records when possible.
+- Do not spawn fleets of Claude agents for implementation or validation.
+
+## Verification
+
+Run `npm run check`. It checks the generated banner, Biome lint, Knip, strict
+type checking, and offline tests. `npm test` runs `tsc --noEmit` and the unit
+test suite. Use Node 24.12 or newer and avoid `DEP0190` warnings.
+
+| Command | Check | Login needed |
+| --- | --- | --- |
+| `npm run test:live:compaction` | Native compaction | Claude |
+| `npm run test:live:zen` | Zen tools, cache, and resume | Zen API key |
+| `npm run test:live:cursor` | Cursor SDK tools, continuation, and disk resume | Cursor SDK login |
+| `npm run test:live:auto-mode` | Native Auto mode | Provider login under test |
+| `npm run test:live:provider-approval` | Provider approval | Provider login under test |
+| `npm run test:live:reviewer` | Reviewer ownership | OpenAI/Cursor login as applicable |
+| `npm run test:live:approval-worker` | Worker approval | Provider login under test |
+| `npm run test:live:permissions` | Native permissions | Claude and provider login |
+| `npm run test:live:antigravity` | Antigravity CLI harness | `agy` login |
+| `npm run test:live:install` | Plugin installation | None |
+
+The definition of done is passing relevant checks, no `DEP0190` warnings, and an
+updated `CHANGELOG.md` for user-facing changes.
+
+## Code style
+
+Biome requires braces, one variable declaration per statement, no nested ternaries,
+no parameter reassignment, no explicit `any`, no non-null assertions, and cognitive
+complexity of 15 or less. Do not disable rules, add blanket suppressions, or raise
+limits. Explain any narrow suppression beside the constrained code. Use clear
+state ownership and keep protocol constraints explicit.

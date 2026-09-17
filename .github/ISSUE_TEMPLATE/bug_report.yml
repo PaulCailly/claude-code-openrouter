@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a gateway, provider, tool or session problem.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! A few quick things that make these much faster to triage:
+
+        - Re-run with **`MULTI_NATIVE_TRACE=1`** for gateway routing, model/effort and status diagnostics.
+        - Include your Claude Code, Node and relevant provider CLI/SDK versions.
+        - Identify the model/worker and permission mode, and redact private workspace paths from logs.
+
+  - type: dropdown
+    id: cli
+    attributes:
+      label: Which integration is involved?
+      options:
+        - OpenAI / Codex login
+        - Cursor SDK
+        - OpenCode Zen
+        - Antigravity CLI
+        - Claude passthrough
+        - Gateway / model picker / workers
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: cli-version
+    attributes:
+      label: Claude Code, Node and provider versions
+      placeholder: "Claude Code: … / Node: … / provider CLI or SDK: …"
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, what did you get?
+      placeholder: |
+        I ran `claude-multi` and asked openai-luna-high to fix foo.js.
+        I expected the worker to edit foo.js and report what it changed.
+        Instead the worker failed with "OpenAI returned HTTP 400" after 8 minutes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: trace
+    attributes:
+      label: Gateway trace (if applicable)
+      description: Re-run with `MULTI_NATIVE_TRACE=1` and paste the relevant stderr. Do not include credentials or private task content.
+      render: shell
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "Windows 11 / macOS 14 / Ubuntu 24"
