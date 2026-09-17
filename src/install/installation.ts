@@ -30,7 +30,7 @@ export interface Installation {
   shims?: string[];
   /** Launch command name; `claude-multi` unless customized. */
   command?: string;
-  /** Persisted `MULTI_MODELS` picker selection; undefined keeps launcher defaults. */
+  /** Persisted `OPENROUTER_MODELS` picker selection; undefined keeps launcher defaults. */
   models?: string;
 }
 
@@ -134,9 +134,9 @@ function normalizeModels(value: string | undefined): string | undefined {
     .map((model) => model.trim())
     .filter(Boolean);
   for (const model of models) {
-    if (!/^multi\/[a-z]+\/[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(model)) {
+    if (!/^openrouter\/[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(model)) {
       throw new Error(
-        `Invalid picker model ID: ${JSON.stringify(model)}. Use full IDs such as multi/zen/glm-5.3, or all/none.`,
+        `Invalid picker model ID: ${JSON.stringify(model)}. Use full IDs such as openrouter/glm-5.3, or all/none.`,
       );
     }
   }

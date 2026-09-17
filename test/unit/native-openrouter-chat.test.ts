@@ -4,7 +4,7 @@ import type { Emit, StreamEventBody } from '../../src/gateway/messages.ts';
 import { toolName } from '../../src/gateway/tools.ts';
 import { fromChat, toChat } from '../../src/openrouter/chat.ts';
 
-const model = 'multi/zen/kimi-k2.7-code';
+const model = 'openrouter/kimi-k2.7-code';
 const tools = [{ name: 'Read File', description: 'read', input_schema: { type: 'object' } }];
 const readAlias = toolName('Read File');
 
@@ -49,7 +49,7 @@ test('toChat keeps assistant call groups and only replays own model reasoning', 
   const own = {
     type: 'thinking',
     thinking: '',
-    signature: 'multi-zen-chat:kimi-k2.7-code:eyJyZWFzb25pbmciOiIifQ',
+    signature: 'openrouter-chat:kimi-k2.7-code:eyJyZWFzb25pbmciOiIifQ',
   };
   const body = toChat(
     {
@@ -68,7 +68,7 @@ test('toChat keeps assistant call groups and only replays own model reasoning', 
         {
           role: 'assistant',
           content: [
-            { type: 'thinking', thinking: 'foreign', signature: 'multi-openai:x' },
+            { type: 'thinking', thinking: 'foreign', signature: 'openrouter-legacy:x' },
             { type: 'text', text: 'done' },
           ],
         },
@@ -91,7 +91,7 @@ test('toChat keeps assistant call groups and only replays own model reasoning', 
       messages: [
         {
           role: 'assistant',
-          content: [{ type: 'thinking', thinking: 'foreign', signature: 'multi-openai:x' }],
+          content: [{ type: 'thinking', thinking: 'foreign', signature: 'openrouter-legacy:x' }],
         },
         { role: 'user', content: 'next' },
       ],
@@ -107,7 +107,7 @@ test('toChat keeps assistant call groups and only replays own model reasoning', 
             {
               role: 'assistant',
               content: [
-                { type: 'thinking', signature: 'multi-zen-chat:kimi-k2.7-code:not-base64' },
+                { type: 'thinking', signature: 'openrouter-chat:kimi-k2.7-code:not-base64' },
               ],
             },
           ],

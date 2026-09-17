@@ -26,7 +26,7 @@ setup. Use the defaults unless the user chooses otherwise:
 Run the fixed helper using this plugin's root, adding the chosen flags:
 
 ```sh
-node "${CLAUDE_PLUGIN_ROOT}/plugins/multi-core/src/setup.ts"
+node "${CLAUDE_PLUGIN_ROOT}/plugins/openrouter/src/setup.ts"
 ```
 
 Re-running setup without flags keeps the previous command name and model

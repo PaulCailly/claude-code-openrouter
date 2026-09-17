@@ -116,25 +116,25 @@ async function core(directory: string, name: string) {
   await mkdir(path.join(root, '.claude-plugin'), { recursive: true });
   await writeFile(
     path.join(root, '.claude-plugin/plugin.json'),
-    JSON.stringify({ name: 'multi-core' }),
+    JSON.stringify({ name: 'openrouter' }),
   );
   const src = path.join(root, 'src');
   await mkdir(src, { recursive: true });
   await writeFile(
     path.join(src, 'launcher.ts'),
-    `console.log(JSON.stringify({root:import.meta.url,args:process.argv.slice(2),providers:process.env.MULTI_ENABLED_PROVIDERS,claude:process.env.MULTI_REAL_CLAUDE,models:process.env.MULTI_MODELS ?? null}));`,
+    `console.log(JSON.stringify({root:import.meta.url,args:process.argv.slice(2),providers:process.env.OPENROUTER_ENABLED_PROVIDERS,claude:process.env.OPENROUTER_REAL_CLAUDE,models:process.env.OPENROUTER_MODELS ?? null}));`,
   );
   return root;
 }
 
-function plugins(root: string, zen = true) {
+function plugins(root: string, openrouter = true) {
   return [
-    { id: `multi-core@${marketplace}`, enabled: true, scope: 'user', installPath: root },
+    { id: `openrouter@${marketplace}`, enabled: true, scope: 'user', installPath: root },
     {
-      id: `multi-zen@${marketplace}`,
-      enabled: zen,
+      id: `multi-openrouter@${marketplace}`,
+      enabled: openrouter,
       scope: 'user',
-      installPath: path.join(root, 'zen'),
+      installPath: path.join(root, 'openrouter'),
     },
     {
       id: `multi-cursor@${marketplace}`,
@@ -177,7 +177,7 @@ test('wrapper follows installed core updates and enables only selected providers
   const args = ['--settings', '{"model":"sonnet"}', '--', 'literal $() and spaces'];
   const first = JSON.parse((await f.invoke('claude-multi', args)).stdout);
   assert.deepEqual(first.args, args);
-  assert.equal(first.providers, 'zen');
+  assert.equal(first.providers, 'openrouter');
   assert.equal(first.claude, f.real);
   const next = path.join(f.directory, 'core-v2');
   await cp(old, next, { recursive: true });
@@ -195,20 +195,20 @@ test('setup renames the launch command, persists picker models, and keeps them a
   const stateFile = path.join(f.home, '.local/share/multi-cli/state.json');
   const shim = (name: string) =>
     path.join(f.home, '.local/share/multi-cli/bin', f.windows ? `${name}.cmd` : name);
-  const first = await f.install(['--command', 'mc', '--models', 'multi/zen/kimi-k2.5']);
+  const first = await f.install(['--command', 'mc', '--models', 'openrouter/kimi-k2.5']);
   assert.match(first.stdout, /start mc\./);
-  assert.match(first.stdout, /shows only: multi\/zen\/kimi-k2\.5/);
+  assert.match(first.stdout, /shows only: openrouter\/kimi-k2\.5/);
   await assert.rejects(access(shim('claude-multi')), /ENOENT/);
   const custom = JSON.parse((await f.invoke('mc', [])).stdout);
-  assert.equal(custom.models, 'multi/zen/kimi-k2.5');
-  assert.equal(custom.providers, 'zen');
+  assert.equal(custom.models, 'openrouter/kimi-k2.5');
+  assert.equal(custom.providers, 'openrouter');
   // An explicit environment selection still wins for one launch.
-  const explicit = JSON.parse((await f.invoke('mc', [], { MULTI_MODELS: '' })).stdout);
+  const explicit = JSON.parse((await f.invoke('mc', [], { OPENROUTER_MODELS: '' })).stdout);
   assert.equal(explicit.models, '');
   // Re-running setup without flags keeps the customization.
   await f.install();
   assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).command, 'mc');
-  assert.equal(JSON.parse((await f.invoke('mc', [])).stdout).models, 'multi/zen/kimi-k2.5');
+  assert.equal(JSON.parse((await f.invoke('mc', [])).stdout).models, 'openrouter/kimi-k2.5');
   // `none` hides external rows; `all` restores launcher defaults.
   await f.install(['--models', 'none']);
   assert.equal(JSON.parse((await f.invoke('mc', [])).stdout).models, '');
@@ -218,7 +218,7 @@ test('setup renames the launch command, persists picker models, and keeps them a
   // Renaming removes the previous shim and uninstall removes the current one.
   await f.install(['--command', 'claude-multi']);
   await assert.rejects(access(shim('mc')), /ENOENT/);
-  assert.equal(JSON.parse((await f.invoke('claude-multi', [])).stdout).providers, 'zen');
+  assert.equal(JSON.parse((await f.invoke('claude-multi', [])).stdout).providers, 'openrouter');
   await assert.rejects(f.install(['--command', 'multi']), /reserved/);
   await assert.rejects(f.install(['--command', 'bad name']), /Invalid launch command/);
   await assert.rejects(f.install(['--models', 'gpt-6-astra']), /Invalid picker model/);
@@ -236,9 +236,9 @@ test('a launch command named claude passes nested runs through to the real execu
   await writeFile(f.listing, JSON.stringify(plugins(root)));
   const install = await f.install(['--command', 'claude']);
   assert.match(install.stderr, /shadows the plain claude command/);
-  assert.equal(JSON.parse((await f.invoke('claude', [])).stdout).providers, 'zen');
+  assert.equal(JSON.parse((await f.invoke('claude', [])).stdout).providers, 'openrouter');
   const nested = JSON.parse(
-    (await f.invoke('claude', ['-p', 'hi'], { MULTI_GATEWAY_TOKEN: 'token' })).stdout,
+    (await f.invoke('claude', ['-p', 'hi'], { OPENROUTER_GATEWAY_TOKEN: 'token' })).stdout,
   );
   assert.deepEqual(nested, { native: true, args: ['-p', 'hi'] });
 });
@@ -326,7 +326,7 @@ test('Windows executable discovery uses PATHEXT and does not require mode bits',
 test('provider selection and native settings arguments preserve explicit disablement', () => {
   assert.equal(providerSelection(undefined), undefined);
   assert.deepEqual(providerSelection(''), []);
-  assert.deepEqual(providerSelection('zen,zen'), ['zen']);
+  assert.deepEqual(providerSelection('openrouter,openrouter'), ['openrouter']);
   assert.throws(() => providerSelection('typo'), /Unknown Multi provider/);
   assert.deepEqual(
     settingsArguments([

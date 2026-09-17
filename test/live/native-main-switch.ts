@@ -55,7 +55,7 @@ const child = spawn(
     cwd,
     detached: true,
     env: isolatedEnvironment({
-      MULTI_NATIVE_TRACE: '1',
+      OPENROUTER_NATIVE_TRACE: '1',
       CLAUDE_CODE_MAX_RETRIES: '0',
     }),
     stdio: ['pipe', 'pipe', 'pipe'],

@@ -11,7 +11,7 @@ import { isolatedEnvironment } from './environment.ts';
 const run = promisify(execFile);
 const root = await mkdtemp(path.join(os.tmpdir(), 'multi-session-lifecycle-'));
 const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
-const realClaude = process.env.MULTI_REAL_CLAUDE || 'claude';
+const realClaude = process.env.OPENROUTER_REAL_CLAUDE || 'claude';
 await mkdir(path.join(root, 'config'));
 await writeFile(
   path.join(root, 'config', '.claude.json'),
@@ -60,8 +60,8 @@ const env = isolatedEnvironment({
   HOME: root,
   CODEX_HOME: root,
   CLAUDE_CONFIG_DIR: path.join(root, 'config'),
-  MULTI_REAL_CLAUDE: wrapper,
-  MULTI_ENABLED_PROVIDERS: 'openai',
+  OPENROUTER_REAL_CLAUDE: wrapper,
+  OPENROUTER_ENABLED_PROVIDERS: 'openai',
   ANTHROPIC_AUTH_TOKEN: 'fixture',
   NODE_OPTIONS: `--import=${fixture}`,
 });

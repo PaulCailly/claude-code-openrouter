@@ -1,4 +1,4 @@
-// Opt-in live contract for OpenCode Zen. Keep the default run small: one tool
+// Opt-in live contract for OpenRouter. Keep the default run small: one tool
 // loop and one saved-session resume prove routing, history, and prompt reuse.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -10,8 +10,8 @@ import type { GatewayFetch } from '../../src/gateway/fetch.ts';
 import type { MessagesResponse } from '../../src/gateway/messages.ts';
 import { createNativeGateway, type GatewayOptions } from '../../src/gateway/server.ts';
 import { readSse } from '../../src/gateway/sse.ts';
-import { readZenKey } from '../../src/openrouter/auth.ts';
-import { zenModel, zenPickerOptions } from '../../src/openrouter/models.ts';
+import { readOpenRouterKey } from '../../src/openrouter/auth.ts';
+import { openrouterModel, openrouterPickerOptions } from '../../src/openrouter/models.ts';
 import { isolatedEnvironment } from './environment.ts';
 
 interface UsageSample {
@@ -73,7 +73,7 @@ interface RawUsage {
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
   console.log(
-    'Usage: node test/live/native-zen.ts [--model MODEL] [--switch MODEL] [--compaction] [--cancel] [--min-cache-ratio RATIO]\nCovers Responses and Chat models in one bounded Zen session. The default is three inference requests; optional checks stay under twelve upstream requests. Set OPENCODE_API_KEY or connect OpenCode Zen first.',
+    'Usage: node test/live/native-openrouter.ts [--model MODEL] [--switch MODEL] [--compaction] [--cancel] [--min-cache-ratio RATIO]\nCovers Responses and Chat models in one bounded OpenRouter session. The default is three inference requests; optional checks stay under twelve upstream requests. Set OPENROUTER_API_KEY or connect OpenRouter first.',
   );
   process.exit(0);
 }
@@ -90,21 +90,21 @@ const cancellation = args.includes('--cancel');
 const minCacheRatio = Number(option('--min-cache-ratio') ?? '0.9');
 function requireApiKey(value: string | undefined): string {
   if (!value) {
-    throw new Error('Set OPENCODE_API_KEY or connect OpenCode Zen before running the live check.');
+    throw new Error('Set OPENROUTER_API_KEY or connect OpenRouter before running the live check.');
   }
   return value;
 }
-const apiKey = requireApiKey(await readZenKey());
+const apiKey = requireApiKey(await readOpenRouterKey());
 assert(!option('--model') || model.length > 0, '--model requires a non-empty model id');
 assert(!switchedModel || switchedModel.length > 0, '--switch requires a non-empty model id');
-assert(zenModel(model), `Unsupported Zen model: ${model}`);
+assert(openrouterModel(model), `Unsupported OpenRouter model: ${model}`);
 if (switchedModel) {
-  assert(zenModel(switchedModel), `Unsupported Zen model: ${switchedModel}`);
+  assert(openrouterModel(switchedModel), `Unsupported OpenRouter model: ${switchedModel}`);
   assert.notEqual(switchedModel, model, '--switch must select a different model');
 }
 assert(Number.isFinite(minCacheRatio) && minCacheRatio >= 0 && minCacheRatio <= 1);
 
-const artifacts = await mkdtemp(path.join(os.tmpdir(), 'native-zen-'));
+const artifacts = await mkdtemp(path.join(os.tmpdir(), 'native-openrouter-'));
 console.log(`Artifacts: ${artifacts}`);
 const cwd = artifacts;
 const settingsFile = path.join(artifacts, 'claude-settings.json');
@@ -115,19 +115,19 @@ await writeFile(
   settingsFile,
   JSON.stringify({
     modelPicker: {
-      options: zenPickerOptions(pickerModels.join(',')).map(
+      options: openrouterPickerOptions(pickerModels.join(',')).map(
         ({ model: pickerModel, label, efforts }) => ({
           model: pickerModel,
-          label: `Zen · ${label}`,
+          label: `OpenRouter · ${label}`,
           behavesAs: efforts?.length ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
-          description: `Zen API billing · Claude tools${efforts ? '' : ' · native reasoning; /effort not applicable'}`,
+          description: `OpenRouter API billing · Claude tools${efforts ? '' : ' · native reasoning; /effort not applicable'}`,
         }),
       ),
     },
   }),
 );
 const fixtureNonce = randomBytes(8).toString('hex');
-const finalLine = `ZEN_FINAL_${fixtureNonce}`;
+const finalLine = `OPENROUTER_FINAL_${fixtureNonce}`;
 await writeFile(
   path.join(artifacts, 'fixture.txt'),
   Array.from({ length: 240 }, (_, index) =>
@@ -184,7 +184,7 @@ function instructions(body: Record<string, unknown>): unknown {
 }
 
 async function observe(response: Response, sample: UsageSample) {
-  assert(response.body, 'Zen returned no response body');
+  assert(response.body, 'OpenRouter returned no response body');
   for await (const raw of readSse(response.body)) {
     const event = raw as {
       type?: string;
@@ -217,10 +217,13 @@ function createGateway() {
     assert(samples.length < maxUpstreamRequests, `Exceeded ${maxUpstreamRequests}-request budget`);
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     const headers = init.headers;
-    assert(headers['x-opencode-session'], 'Zen request is missing its sticky session header');
+    assert(
+      headers['x-opencode-session'],
+      'OpenRouter request is missing its sticky session header',
+    );
     const promptCacheKey = typeof body.prompt_cache_key === 'string' ? body.prompt_cache_key : '';
     if (body.input !== undefined) {
-      assert(promptCacheKey, 'Zen Responses request is missing its prompt cache key');
+      assert(promptCacheKey, 'OpenRouter Responses request is missing its prompt cache key');
       assert.equal(promptCacheKey, headers['x-opencode-session']);
     }
     const sample: UsageSample = {
@@ -252,7 +255,7 @@ function createGateway() {
   const options: GatewayOptions = {
     token: gatewayToken,
     blockAnthropic: true,
-    zen: { apiKey },
+    openrouter: { apiKey },
     fetchImpl,
   };
   return createNativeGateway(options);
@@ -289,8 +292,8 @@ async function runClaude(
       first ? '--session-id' : '--resume',
       sessionId,
       '--model',
-      `multi/zen/${selectedModel}`,
-      ...(zenModel(selectedModel)?.protocol === 'responses' ? ['--effort', 'low'] : []),
+      `openrouter/${selectedModel}`,
+      ...(openrouterModel(selectedModel)?.protocol === 'responses' ? ['--effort', 'low'] : []),
       ...(useTools ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--tools', '']),
       '--strict-mcp-config',
       '--settings',
@@ -306,7 +309,7 @@ async function runClaude(
       cwd,
       env: isolatedEnvironment({
         ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
-        ANTHROPIC_CUSTOM_HEADERS: `x-multi-gateway-token: ${gatewayToken}`,
+        ANTHROPIC_CUSTOM_HEADERS: `x-openrouter-gateway-token: ${gatewayToken}`,
         CLAUDE_CODE_MAX_RETRIES: '0',
         CLAUDE_CODE_MAX_TURNS: '8',
       }),
@@ -356,7 +359,7 @@ async function runClaude(
     await Promise.all(observations.slice(observationStart));
     // Claude's turn usage excludes auxiliary title generation. Its model totals
     // include those billed requests, as do the raw upstream samples below.
-    const usage = result.modelUsage?.[`multi/zen/${selectedModel}`];
+    const usage = result.modelUsage?.[`openrouter/${selectedModel}`];
     assert(usage, `${stage}: missing model usage`);
     assert.equal(usage.cacheReadInputTokens, sum(stage, 'cached'));
     assert.equal(usage.cacheCreationInputTokens, sum(stage, 'written'));
@@ -396,9 +399,9 @@ async function cancelRequest(port: number) {
   const request = fetch(`http://127.0.0.1:${port}/v1/messages`, {
     method: 'POST',
     signal: controller.signal,
-    headers: { 'content-type': 'application/json', 'x-multi-gateway-token': gatewayToken },
+    headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': gatewayToken },
     body: JSON.stringify({
-      model: `multi/zen/${model}`,
+      model: `openrouter/${model}`,
       stream: true,
       system: 'Answer with a very long numbered list.',
       messages: [{ role: 'user', content: 'Generate 10000 numbered lines before stopping.' }],
@@ -411,7 +414,10 @@ async function cancelRequest(port: number) {
   while (!cancellationSignal?.aborted && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  assert(cancellationSignal?.aborted, 'Gateway did not propagate client cancellation to Zen');
+  assert(
+    cancellationSignal?.aborted,
+    'Gateway did not propagate client cancellation to OpenRouter',
+  );
 }
 
 const { server: cancelServer, port: cancelPort } = cancellation ? await listen() : {};
@@ -478,13 +484,13 @@ try {
   const warm = cacheRatio('resume');
   assert(
     warm.input > 0 && warm.ratio >= minCacheRatio,
-    `Zen resume cache ratio ${warm.ratio.toFixed(3)} is below ${minCacheRatio}; inspect the report before repeating paid probes`,
+    `OpenRouter resume cache ratio ${warm.ratio.toFixed(3)} is below ${minCacheRatio}; inspect the report before repeating paid probes`,
   );
   if (compaction) {
     const postCompaction = cacheRatio('post-compaction-warm');
     assert(
       postCompaction.input > 0 && postCompaction.ratio >= minCacheRatio,
-      `Zen post-compaction cache ratio ${postCompaction.ratio.toFixed(3)} is below ${minCacheRatio}; inspect the report before repeating paid probes`,
+      `OpenRouter post-compaction cache ratio ${postCompaction.ratio.toFixed(3)} is below ${minCacheRatio}; inspect the report before repeating paid probes`,
     );
   }
   assert(
@@ -493,7 +499,7 @@ try {
         sample.inputTypes.includes('function_call') &&
         sample.inputTypes.includes('function_call_output'),
     ),
-    'Zen tool loop did not preserve a function call and its result in history',
+    'OpenRouter tool loop did not preserve a function call and its result in history',
   );
   for (const selected of new Set(stableSamples.map((sample) => sample.model))) {
     const requests = stableSamples.filter((sample) => sample.model === selected);
@@ -504,7 +510,7 @@ try {
   }
   await writeFile(path.join(artifacts, 'report.json'), JSON.stringify(samples, null, 2));
   console.log(
-    `PASS: Zen ${model} tool loop, saved resume, and prompt-cache usage; artifacts: ${artifacts}`,
+    `PASS: OpenRouter ${model} tool loop, saved resume, and prompt-cache usage; artifacts: ${artifacts}`,
   );
 } catch (error) {
   await writeFile(

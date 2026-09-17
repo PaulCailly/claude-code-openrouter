@@ -25,7 +25,7 @@ async function start(t: test.TestContext, permissionModes?: PermissionModes, gua
 async function request(base: string, route: string, body?: unknown, method = 'POST') {
   const response = await fetch(base + route, {
     method,
-    headers: { 'x-multi-gateway-token': 'mod-token', 'content-type': 'application/json' },
+    headers: { 'x-openrouter-gateway-token': 'mod-token', 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
@@ -33,25 +33,25 @@ async function request(base: string, route: string, body?: unknown, method = 'PO
 
 test('mod mode snapshots acknowledge generations and reject stale updates', async (t) => {
   const base = await start(t);
-  const first = await request(base, '/multi/mod/session', {
+  const first = await request(base, '/openrouter/mod/session', {
     sessionId: 's',
     permissionMode: 'plan',
   });
   assert.equal(first.status, 200);
   assert.equal(first.body.accepted, true);
-  const stale = await request(base, '/multi/mod/session', {
+  const stale = await request(base, '/openrouter/mod/session', {
     sessionId: 's',
     permissionMode: 'bypassPermissions',
     generation: 999,
   });
   assert.equal(stale.status, 409);
-  const mode = await request(base, '/multi/mod/mode?sessionId=s', undefined, 'GET');
+  const mode = await request(base, '/openrouter/mod/mode?sessionId=s', undefined, 'GET');
   assert.deepEqual(mode.body.effective, { permissionMode: 'plan' });
 });
 
 test('mod routes reject unauthenticated requests', async (t) => {
   const base = await start(t);
-  const response = await fetch(`${base}/multi/mod/mode?sessionId=s`);
+  const response = await fetch(`${base}/openrouter/mod/mode?sessionId=s`);
   assert.equal(response.status, 401);
 });
 
@@ -76,7 +76,7 @@ test('permission tool calls recover the same settings-admitted parent policy', a
     cwd: '/workspace',
   });
   const base = await start(t, modes, true);
-  const recovered = await request(base, '/multi/permission', {
+  const recovered = await request(base, '/openrouter/permission', {
     hook_event_name: 'PreToolUse',
     session_id: 'recovered',
     cwd: '/workspace',
@@ -119,7 +119,7 @@ test('permission recovery keeps the parent absent until real policy admission co
 
 test('PermissionModes retains a tool-free compaction boundary and acknowledges workers', async () => {
   const modes = new PermissionModes(async () => ({
-    'zen-worker': {
+    'openrouter-worker': {
       permissionMode: 'plan',
       tools: ['Read'],
       disallowedTools: ['Bash'],
@@ -132,7 +132,7 @@ test('PermissionModes retains a tool-free compaction boundary and acknowledges w
   assert.equal(compact.permissionMode, 'auto');
   assert.equal(typeof compact.compaction, 'string');
   const workerToken = await modes.prepareModWorker('session', {
-    subagentType: 'zen-worker',
+    subagentType: 'openrouter-worker',
     permissionMode: 'auto',
     cwd: '/workspace',
   });
@@ -147,13 +147,13 @@ test('PermissionModes retains a tool-free compaction boundary and acknowledges w
 test('compaction authorization accepts a restored bridge generation without a prompt snapshot', async (t) => {
   const modes = new PermissionModes(async () => ({}));
   const base = await start(t, modes);
-  const started = await request(base, '/multi/mod/session', {
+  const started = await request(base, '/openrouter/mod/session', {
     sessionId: 'resumed',
     event: 'start',
     cwd: '/workspace',
   });
   assert.equal(started.status, 200);
-  const result = await request(base, '/multi/mod/compact/authorize', {
+  const result = await request(base, '/openrouter/mod/compact/authorize', {
     sessionId: 'resumed',
     generation: started.body.generation,
   });
@@ -165,14 +165,14 @@ test('compaction authorization accepts a restored bridge generation without a pr
 
 test('mod requests have a control-plane byte limit and reject malformed restrictions', async (t) => {
   const base = await start(t);
-  const oversized = await fetch(`${base}/multi/mod/session`, {
+  const oversized = await fetch(`${base}/openrouter/mod/session`, {
     method: 'POST',
-    headers: { 'x-multi-gateway-token': 'mod-token' },
+    headers: { 'x-openrouter-gateway-token': 'mod-token' },
     body: JSON.stringify({ sessionId: 's', text: 'x'.repeat(33000) }),
   });
   assert.equal(oversized.status, 413);
   for (const tools of [['Read', 1], ['x'.repeat(513)], 'Read']) {
-    const result = await request(base, '/multi/mod/session', {
+    const result = await request(base, '/openrouter/mod/session', {
       sessionId: 's',
       permissionMode: 'plan',
       tools,
@@ -183,13 +183,13 @@ test('mod requests have a control-plane byte limit and reject malformed restrict
 
 test('mod routes reject browser origins, invalid methods and invalid worker identities', async (t) => {
   const base = await start(t);
-  const browser = await fetch(`${base}/multi/mod/mode?sessionId=s`, {
-    headers: { origin: 'https://example.com', 'x-multi-gateway-token': 'mod-token' },
+  const browser = await fetch(`${base}/openrouter/mod/mode?sessionId=s`, {
+    headers: { origin: 'https://example.com', 'x-openrouter-gateway-token': 'mod-token' },
   });
   assert.equal(browser.status, 401);
-  assert.equal((await request(base, '/multi/mod/session', undefined, 'GET')).status, 400);
+  assert.equal((await request(base, '/openrouter/mod/session', undefined, 'GET')).status, 400);
   assert.equal(
-    (await request(base, '/multi/mod/session', { sessionId: 's', agentId: 3 })).status,
+    (await request(base, '/openrouter/mod/session', { sessionId: 's', agentId: 3 })).status,
     400,
   );
 });
@@ -197,7 +197,7 @@ test('mod routes reject browser origins, invalid methods and invalid worker iden
 test('display observations retain only bounded pending actions and lifecycle state', () => {
   const bridge = new ModBridge();
   const key = JSON.stringify(['s', 'worker']);
-  bridge.begin(key, 'multi/zen/glm-5.3');
+  bridge.begin(key, 'openrouter/glm-5.3');
   bridge.observe(key, { type: 'started', id: 'row', kind: 'read', description: 'file' });
   assert.equal(bridge.status(key)?.detail, 'file');
   const row = bridge.observe(key, { type: 'completed', id: 'row', text: 'result', error: false });
@@ -213,18 +213,18 @@ test('display observations retain only bounded pending actions and lifecycle sta
 });
 
 async function admit(base: string) {
-  const initial = await request(base, '/multi/mod/session', {
+  const initial = await request(base, '/openrouter/mod/session', {
     sessionId: 's',
     event: 'start',
     cwd: '/workspace',
   });
-  const policy = await request(base, '/multi/mod/policy', {
+  const policy = await request(base, '/openrouter/mod/policy', {
     sessionId: 's',
     cwd: '/workspace',
     sourceGeneration: initial.body.generation,
   });
   await setImmediate();
-  const prompt = await request(base, '/multi/mod/session', {
+  const prompt = await request(base, '/openrouter/mod/session', {
     sessionId: 's',
     event: 'prompt',
     cwd: '/workspace',
@@ -241,13 +241,13 @@ test('compaction core fallback authenticates generation and removes all native c
   const modes = new PermissionModes(async () => ({}));
   const base = await start(t, modes);
   const generation = await admit(base);
-  const stale = await request(base, '/multi/mod/compact/authorize', {
+  const stale = await request(base, '/openrouter/mod/compact/authorize', {
     sessionId: 's',
     generation: -1,
   });
   assert.equal(stale.status, 400);
   assert.equal(modes.resolve('s').compaction, undefined);
-  const accepted = await request(base, '/multi/mod/compact/authorize', {
+  const accepted = await request(base, '/openrouter/mod/compact/authorize', {
     sessionId: 's',
     generation,
   });
@@ -258,7 +258,7 @@ test('compaction core fallback authenticates generation and removes all native c
 
 test('worker route authenticates catalog and generation before child-start acknowledgement', async (t) => {
   const modes = new PermissionModes(async () => ({
-    worker: { model: 'multi/zen/glm-5.3', tools: ['Read'] },
+    worker: { model: 'openrouter/glm-5.3', tools: ['Read'] },
   }));
   const base = await start(t, modes);
   const generation = await admit(base);
@@ -271,18 +271,18 @@ test('worker route authenticates catalog and generation before child-start ackno
     subagentType: 'worker',
   };
   assert.equal(
-    (await request(base, '/multi/mod/worker', { ...spawn, generation: -1 })).status,
+    (await request(base, '/openrouter/mod/worker', { ...spawn, generation: -1 })).status,
     400,
   );
   assert.equal(
-    (await request(base, '/multi/mod/worker', { ...spawn, model: 'wrong' })).status,
+    (await request(base, '/openrouter/mod/worker', { ...spawn, model: 'wrong' })).status,
     400,
   );
-  assert.equal((await request(base, '/multi/mod/worker', spawn)).body.accepted, true);
+  assert.equal((await request(base, '/openrouter/mod/worker', spawn)).body.accepted, true);
   assert.throws(() => modes.resolve('s', 'child'), /unavailable/);
   assert.equal(
     (
-      await request(base, '/multi/mod/worker', {
+      await request(base, '/openrouter/mod/worker', {
         sessionId: 's',
         agentId: 'child',
         cwd: '/workspace',
@@ -299,7 +299,7 @@ test('model effort telemetry is scoped observation and cannot change policy', as
   const base = await start(t, modes);
   await admit(base);
   const before = modes.resolve('s');
-  await request(base, '/multi/mod/telemetry', {
+  await request(base, '/openrouter/mod/telemetry', {
     sessionId: 's',
     agentId: 'worker',
     model: 'multi/openai/gpt-6-astra',
@@ -308,7 +308,7 @@ test('model effort telemetry is scoped observation and cannot change policy', as
   });
   const telemetry = await request(
     base,
-    '/multi/mod/telemetry?sessionId=s&agentId=worker',
+    '/openrouter/mod/telemetry?sessionId=s&agentId=worker',
     undefined,
     'GET',
   );
@@ -319,7 +319,7 @@ test('model effort telemetry is scoped observation and cannot change policy', as
 test('a prompt snapshot without a permission mode admits no policy but never blocks', async (t) => {
   const modes = new PermissionModes(async () => ({}));
   const base = await start(t, modes);
-  const accepted = await request(base, '/multi/mod/session', {
+  const accepted = await request(base, '/openrouter/mod/session', {
     sessionId: 'prompt',
     event: 'prompt',
     cwd: '/workspace',
@@ -335,7 +335,7 @@ test('a prompt snapshot without a permission mode admits no policy but never blo
 test('a session start snapshot still records without carrying a permission mode', async (t) => {
   const modes = new PermissionModes(async () => ({}));
   const base = await start(t, modes);
-  const started = await request(base, '/multi/mod/session', {
+  const started = await request(base, '/openrouter/mod/session', {
     sessionId: 'start-only',
     event: 'start',
     cwd: '/workspace',

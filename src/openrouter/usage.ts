@@ -1,39 +1,41 @@
-import { readZenKey, validateZenKey, type ZenAuthPathOptions } from './auth.ts';
+import { type AuthPathOptions, readOpenRouterKey, validateKey } from './auth.ts';
 
-interface ZenQuotaWindow {
+interface OpenRouterQuotaWindow {
   status: 'ok' | 'rate-limited';
   percent: number;
   resetsAt: string;
 }
 
-interface ZenGoQuota {
-  rolling: ZenQuotaWindow;
-  weekly: ZenQuotaWindow;
-  monthly: ZenQuotaWindow;
+interface OpenRouterQuota {
+  rolling: OpenRouterQuotaWindow;
+  weekly: OpenRouterQuotaWindow;
+  monthly: OpenRouterQuotaWindow;
 }
 
-export type ZenQuotaResult =
-  | { status: 'available'; quota: ZenGoQuota }
+export type OpenRouterQuotaResult =
+  | { status: 'available'; quota: OpenRouterQuota }
   | {
       status: 'unavailable';
       reason: 'missing-key' | 'not-go-entitled' | 'unauthorized' | 'network' | 'malformed';
     };
 
-export interface ZenQuotaOptions extends ZenAuthPathOptions {
+export interface OpenRouterQuotaOptions extends AuthPathOptions {
   apiKey?: string;
   endpoint?: string;
   fetch?: typeof globalThis.fetch;
   timeoutMs?: number;
 }
 
-const defaultEndpoint = 'https://opencode.ai/zen/go/v1/usage';
+const defaultEndpoint = 'https://opencode.ai/openrouter/go/v1/usage';
 
-export async function readZenQuota(options: ZenQuotaOptions = {}): Promise<ZenQuotaResult> {
+export async function readOpenRouterQuota(
+  options: OpenRouterQuotaOptions = {},
+): Promise<OpenRouterQuotaResult> {
   let key: string | undefined;
   if (options.apiKey === undefined) {
-    key = await readZenKey(options);
+    key = await readOpenRouterKey(options);
   } else if (options.apiKey) {
-    key = validateZenKey(options.apiKey);
+    key = validateKey(options.apiKey);
   }
   if (!key) {
     return { status: 'unavailable', reason: 'missing-key' };
@@ -73,24 +75,24 @@ export async function readZenQuota(options: ZenQuotaOptions = {}): Promise<ZenQu
   }
 }
 
-export function formatZenQuota(result: ZenQuotaResult): {
+export function formatOpenRouterQuota(result: OpenRouterQuotaResult): {
   status: 'ready' | 'unavailable' | 'error';
   summary: string;
   details: string[];
 } {
-  const wallet = 'Prepaid Zen balance and charges: check the Zen billing console.';
+  const wallet = 'Prepaid OpenRouter balance and charges: check the OpenRouter billing console.';
   if (result.status === 'unavailable') {
     if (result.reason === 'not-go-entitled') {
       return {
         status: 'unavailable',
         summary: 'No Go subscription for this API key',
-        details: ['Go subscription quota is separate from prepaid Zen usage.', wallet],
+        details: ['Go subscription quota is separate from prepaid OpenRouter usage.', wallet],
       };
     }
     return {
       status: 'error',
       summary: 'Go subscription quota unavailable',
-      details: ['Check the Zen API key and connection, then refresh.', wallet],
+      details: ['Check the OpenRouter API key and connection, then refresh.', wallet],
     };
   }
   const windows = Object.entries(result.quota).map(
@@ -106,7 +108,7 @@ export function formatZenQuota(result: ZenQuotaResult): {
   };
 }
 
-function parseQuota(value: unknown): ZenGoQuota | undefined {
+function parseQuota(value: unknown): OpenRouterQuota | undefined {
   if (!isRecord(value) || !isRecord(value.usage)) {
     return undefined;
   }
@@ -116,7 +118,7 @@ function parseQuota(value: unknown): ZenGoQuota | undefined {
   return rolling && weekly && monthly ? { rolling, weekly, monthly } : undefined;
 }
 
-function parseWindow(value: unknown): ZenQuotaWindow | undefined {
+function parseWindow(value: unknown): OpenRouterQuotaWindow | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -142,6 +144,6 @@ function isEntitlementError(value: unknown) {
     isRecord(value) &&
     isRecord(value.error) &&
     (value.error.type === 'EntitlementError' ||
-      value.error.message === 'OpenCode Go subscription required.')
+      value.error.message === 'OpenRouter Go subscription required.')
   );
 }

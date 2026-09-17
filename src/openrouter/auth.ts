@@ -2,11 +2,11 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-export class ZenAuthError extends Error {}
+export class OpenRouterAuthError extends Error {}
 
-export function validateZenKey(value: string): string {
+export function validateKey(value: string): string {
   if (!/^[\x21-\x7e]+$/.test(value)) {
-    throw new ZenAuthError('Invalid OpenCode Zen API key.');
+    throw new OpenRouterAuthError('Invalid OpenRouter API key.');
   }
   return value;
 }
@@ -19,17 +19,17 @@ function pathForPlatform(platform: NodeJS.Platform) {
   return platform === 'win32' ? path.win32 : path.posix;
 }
 
-export interface ZenAuthPathOptions {
+export interface AuthPathOptions {
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
   homedir?: string;
 }
 
-export function zenAuthFile({
+export function authFile({
   platform = process.platform,
   env = process.env,
   homedir = os.homedir(),
-}: ZenAuthPathOptions = {}): string {
+}: AuthPathOptions = {}): string {
   const explicit = env.OPENCODE_AUTH_FILE;
   if (explicit) {
     return explicit;
@@ -42,28 +42,30 @@ export function zenAuthFile({
   return pathApi.join(dataHome, 'opencode', 'auth.json');
 }
 
-/** Read only the OpenCode Zen API key; credentials stay owned by OpenCode. */
-export async function readZenKey(options: ZenAuthPathOptions = {}): Promise<string | undefined> {
-  const configured = (options.env ?? process.env).OPENCODE_API_KEY;
+/** Read only the OpenRouter API key; credentials stay owned by OpenRouter. */
+export async function readOpenRouterKey(
+  options: AuthPathOptions = {},
+): Promise<string | undefined> {
+  const configured = (options.env ?? process.env).OPENROUTER_API_KEY;
   if (configured !== undefined) {
-    return validateZenKey(configured);
+    return validateKey(configured);
   }
 
   let source: string;
   try {
-    source = await readFile(zenAuthFile(options), 'utf8');
+    source = await readFile(authFile(options), 'utf8');
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return undefined;
     }
-    throw new ZenAuthError('Cannot read OpenCode auth.json.');
+    throw new OpenRouterAuthError('Cannot read OpenRouter auth.json.');
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new ZenAuthError('OpenCode auth.json is invalid.');
+    throw new OpenRouterAuthError('OpenRouter auth.json is invalid.');
   }
   if (!isRecord(parsed) || parsed.opencode === undefined) {
     return undefined;
@@ -75,28 +77,28 @@ export async function readZenKey(options: ZenAuthPathOptions = {}): Promise<stri
     typeof entry.key !== 'string' ||
     !entry.key.trim()
   ) {
-    throw new ZenAuthError('OpenCode auth.json has invalid Zen API credentials.');
+    throw new OpenRouterAuthError('OpenRouter auth.json has invalid OpenRouter API credentials.');
   }
-  return validateZenKey(entry.key);
+  return validateKey(entry.key);
 }
 
-/** Persist local key entry in OpenCode's existing auth store, preserving other providers. */
-export async function saveZenKey(key: string, options: ZenAuthPathOptions = {}): Promise<void> {
-  const validated = validateZenKey(key);
+/** Persist local key entry in OpenRouter's existing auth store, preserving other providers. */
+export async function saveOpenRouterKey(key: string, options: AuthPathOptions = {}): Promise<void> {
+  const validated = validateKey(key);
   const platform = options.platform ?? process.platform;
   const pathApi = pathForPlatform(platform);
-  const file = zenAuthFile(options);
+  const file = authFile(options);
   let entries: Record<string, unknown> = {};
   try {
     const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
     if (!isRecord(parsed)) {
-      throw new ZenAuthError('OpenCode auth.json is invalid.');
+      throw new OpenRouterAuthError('OpenRouter auth.json is invalid.');
     }
     entries = parsed;
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
-      throw new ZenAuthError(
-        'Cannot update OpenCode auth.json. Existing credentials were preserved.',
+      throw new OpenRouterAuthError(
+        'Cannot update OpenRouter auth.json. Existing credentials were preserved.',
       );
     }
   }

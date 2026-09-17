@@ -4,10 +4,10 @@ import http from 'node:http';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { validateZenKey } from '../openrouter/auth.ts';
+import { validateKey } from '../openrouter/auth.ts';
 import { fromChat } from '../openrouter/chat.ts';
-import { zenRequest } from '../openrouter/request.ts';
-import { formatZenQuota, readZenQuota } from '../openrouter/usage.ts';
+import { openrouterRequest } from '../openrouter/request.ts';
+import { formatOpenRouterQuota, readOpenRouterQuota } from '../openrouter/usage.ts';
 import type { AgentCatalog } from './agent-catalog.ts';
 import { forAnthropic } from './anthropic.ts';
 import type { GatewayFetch } from './fetch.ts';
@@ -31,7 +31,7 @@ const STRIPPED_REQUEST_HEADERS = [
   'connection',
   'content-length',
   'transfer-encoding',
-  'x-multi-gateway-token',
+  'x-openrouter-gateway-token',
   'accept-encoding',
 ];
 const STRIPPED_RESPONSE_HEADERS = [
@@ -43,7 +43,7 @@ const STRIPPED_RESPONSE_HEADERS = [
 
 /** What the gateway reports to `onEvent`; routing only, never credentials or bodies. */
 export interface GatewayEvent {
-  route: 'anthropic' | 'zen' | 'zen-request';
+  route: 'anthropic' | 'openrouter' | 'openrouter-request';
   model?: string;
   agentId?: string | null;
   path?: string;
@@ -72,7 +72,7 @@ export interface GatewayOptions {
   fetchImpl?: GatewayFetch;
   onEvent?: (event: GatewayEvent) => void;
   timeoutMs?: number;
-  zen?: { apiKey: string };
+  openrouter?: { apiKey: string };
   /** No Anthropic credentials: also block passthrough. */
   blockAnthropic?: boolean;
   guardAuto?: boolean;
@@ -86,8 +86,10 @@ class BadRequest extends Error {}
 class UpstreamFailure extends Error {
   status: number;
   retryAfter: string | null;
-  constructor(status: number, retryAfter: string | null, provider = 'Zen') {
-    super(`${provider} returned HTTP ${status}.${status === 401 ? ' Check the Zen API key.' : ''}`);
+  constructor(status: number, retryAfter: string | null, provider = 'OpenRouter') {
+    super(
+      `${provider} returned HTTP ${status}.${status === 401 ? ' Check the OpenRouter API key.' : ''}`,
+    );
     this.status = status;
     this.retryAfter = retryAfter;
   }
@@ -132,7 +134,7 @@ export function createNativeGateway({
   fetchImpl = fetch,
   onEvent: observer = () => {},
   timeoutMs,
-  zen,
+  openrouter,
   blockAnthropic,
   guardAuto,
   permissionModes,
@@ -144,8 +146,11 @@ export function createNativeGateway({
   const dashboard =
     usageDashboard ??
     new ProviderUsageDashboard({
-      enabled: (enabledProviders ?? ['zen']).filter(() => Boolean(zen)),
-      zen: zen ? async () => formatZenQuota(await readZenQuota({ apiKey: zen.apiKey })) : undefined,
+      enabled: (enabledProviders ?? ['openrouter']).filter(() => Boolean(openrouter)),
+      openrouter: openrouter
+        ? async () =>
+            formatOpenRouterQuota(await readOpenRouterQuota({ apiKey: openrouter.apiKey }))
+        : undefined,
     });
   const onEvent = (event: GatewayEvent) => {
     receipts.observe(event);
@@ -154,8 +159,8 @@ export function createNativeGateway({
   if (!token) {
     throw new Error('Gateway token required');
   }
-  if (zen) {
-    validateZenKey(zen.apiKey);
+  if (openrouter) {
+    validateKey(openrouter.apiKey);
   }
   const fallbackSession = randomUUID();
   const pendingTools = new Map<string, PendingApprovalTool>();
@@ -169,21 +174,26 @@ export function createNativeGateway({
     throw new Error('Precomputed summaries require a native harness model');
   });
 
-  async function handleZen(exchange: ProviderRequest) {
+  async function handleOpenRouter(exchange: ProviderRequest) {
     const { res, body, url, signal, agentId, emit } = exchange;
-    if (!zen?.apiKey) {
-      throw new BadRequest('Zen is not configured. Set OPENCODE_API_KEY or connect OpenCode Zen.');
+    if (!openrouter?.apiKey) {
+      throw new BadRequest(
+        'OpenRouter is not configured. Set OPENROUTER_API_KEY or connect OpenRouter.',
+      );
     }
-    const prepared = prepareZenRequest(exchange, fallbackSession);
+    const prepared = prepareOpenRouterRequest(exchange, fallbackSession);
     if (url.pathname === '/v1/messages/count_tokens') {
-      res.writeHead(200, { 'content-type': 'application/json', 'x-multi-token-count': 'estimate' });
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'x-openrouter-token-count': 'estimate',
+      });
       return res.end(JSON.stringify({ input_tokens: prepared.inputTokens }));
     }
-    onEvent({ route: 'zen-request', agentId, model: body.model });
-    const upstream = await fetchImpl(`https://opencode.ai/zen/v1/${prepared.endpoint}`, {
+    onEvent({ route: 'openrouter-request', agentId, model: body.model });
+    const upstream = await fetchImpl(`https://opencode.ai/openrouter/v1/${prepared.endpoint}`, {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${zen.apiKey}`,
+        authorization: `Bearer ${openrouter.apiKey}`,
         'content-type': 'application/json',
         accept: 'text/event-stream',
         'x-opencode-session': prepared.cacheKey,
@@ -194,12 +204,12 @@ export function createNativeGateway({
       redirect: 'error',
     });
     if (!upstream.ok) {
-      onEvent({ route: 'zen', agentId, status: upstream.status });
+      onEvent({ route: 'openrouter', agentId, status: upstream.status });
       await upstream.body?.cancel();
-      throw new UpstreamFailure(upstream.status, upstream.headers.get('retry-after'), 'Zen');
+      throw new UpstreamFailure(upstream.status, upstream.headers.get('retry-after'), 'OpenRouter');
     }
     if (!upstream.body) {
-      throw new Error('Zen returned no response stream.');
+      throw new Error('OpenRouter returned no response stream.');
     }
     exchange.startStream();
     const options = {
@@ -219,7 +229,7 @@ export function createNativeGateway({
     if (result.stop_reason === 'stop_sequence') {
       exchange.abort.abort();
     }
-    onEvent(completionEvent(exchange, result, 'zen', prepared.endpoint));
+    onEvent(completionEvent(exchange, result, 'openrouter', prepared.endpoint));
     sendResult(exchange, result);
   }
   async function handleAnthropic(exchange: ProviderRequest) {
@@ -325,7 +335,7 @@ export function createNativeGateway({
     if (!external) {
       return handleAnthropic(exchange);
     }
-    return handleZen(exchange);
+    return handleOpenRouter(exchange);
   }
   return http.createServer(async (req, res) => {
     const abort = new AbortController();
@@ -364,7 +374,7 @@ export function createNativeGateway({
       }
       const url = new URL(req.url ?? '', 'http://localhost');
       const { raw, parsed, body } = await readRequest(req, agentCatalog);
-      if (url.pathname.startsWith('/multi/mod/')) {
+      if (url.pathname.startsWith('/openrouter/mod/')) {
         return handleModRoute(
           req,
           res,
@@ -412,7 +422,7 @@ export function createNativeGateway({
           heartbeat = setInterval(() => emit('ping', {}), 15000);
         },
       };
-      if (url.pathname === '/multi/permission') {
+      if (url.pathname === '/openrouter/permission') {
         return sendPermissionDecision(exchange);
       }
       await dispatch(exchange, metadata, external);
@@ -429,7 +439,7 @@ class RequestTooLarge extends Error {}
 
 function providerSignal(disconnected: AbortSignal, model: string | null, timeoutMs?: number) {
   // Direct provider runs follow the client connection rather than an HTTP deadline.
-  if (model?.startsWith('multi/zen/') && timeoutMs === undefined) {
+  if (model?.startsWith('openrouter/') && timeoutMs === undefined) {
     return disconnected;
   }
   return AbortSignal.any([disconnected, AbortSignal.timeout(timeoutMs ?? 180000)]);
@@ -440,7 +450,7 @@ async function readRequest(req: http.IncomingMessage, catalog?: AgentCatalog) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > (req.url?.startsWith('/multi/mod/') ? 32 * 1024 : MAX_BODY)) {
+    if (size > (req.url?.startsWith('/openrouter/mod/') ? 32 * 1024 : MAX_BODY)) {
       throw new RequestTooLarge();
     }
     chunks.push(chunk);
@@ -459,8 +469,8 @@ async function readRequest(req: http.IncomingMessage, catalog?: AgentCatalog) {
   return { raw: body === parsed ? raw : Buffer.from(JSON.stringify(body)), parsed, body };
 }
 
-function providerRoute(model: string | null): 'anthropic' | 'zen' {
-  return model?.startsWith('multi/zen/') ? 'zen' : 'anthropic';
+function providerRoute(model: string | null): 'anthropic' | 'openrouter' {
+  return model?.startsWith('openrouter/') ? 'openrouter' : 'anthropic';
 }
 function errorStatus(error: unknown): number {
   if (error instanceof BadRequest) {
@@ -528,16 +538,16 @@ function requestIdentity(
   };
 }
 
-function prepareZenRequest(exchange: ProviderRequest, fallbackSession: string) {
+function prepareOpenRouterRequest(exchange: ProviderRequest, fallbackSession: string) {
   const { req, body, url, identity, agentId } = exchange;
   try {
     if (
       req.method !== 'POST' ||
       !['/v1/messages', '/v1/messages/count_tokens'].includes(url.pathname)
     ) {
-      throw new Error('Zen requires POST /v1/messages or /v1/messages/count_tokens');
+      throw new Error('OpenRouter requires POST /v1/messages or /v1/messages/count_tokens');
     }
-    // Zen uses this for sticky upstream routing. Claude identity survives restarts;
+    // OpenRouter uses this for sticky upstream routing. Claude identity survives restarts;
     // no per-request nonce is inserted into the prompt or cache key.
     const cacheKey = createHash('sha256')
       .update(
@@ -549,7 +559,7 @@ function prepareZenRequest(exchange: ProviderRequest, fallbackSession: string) {
         ]),
       )
       .digest('hex');
-    return { ...zenRequest(body, cacheKey), cacheKey };
+    return { ...openrouterRequest(body, cacheKey), cacheKey };
   } catch (error) {
     throw new BadRequest(reason(error));
   }
@@ -573,9 +583,9 @@ function authorizeRequest(
   token: string,
   guardAuto?: boolean,
 ) {
-  if (req.headers.origin || !authenticated(req.headers['x-multi-gateway-token'], token)) {
+  if (req.headers.origin || !authenticated(req.headers['x-openrouter-gateway-token'], token)) {
     const pathName = new URL(req.url ?? '', 'http://localhost').pathname;
-    res.writeHead(pathName.startsWith('/multi/mod/') ? 401 : 403);
+    res.writeHead(pathName.startsWith('/openrouter/mod/') ? 401 : 403);
     res.end('Forbidden');
     return false;
   }
@@ -586,22 +596,22 @@ function authorizeRequest(
       '/v1/messages/count_tokens',
       '/v1/models',
       '/api/hello',
-      '/multi/mod/session',
-      '/multi/mod/worker',
-      '/multi/mod/mode',
-      '/multi/mod/policy',
-      '/multi/mod/offer',
-      '/multi/mod/telemetry',
-      '/multi/mod/lifecycle',
-      '/multi/mod/usage',
-      '/multi/mod/usage/complete',
-      '/multi/mod/receipts',
-      '/multi/mod/detach',
-      '/multi/mod/compact/precompute',
-      '/multi/mod/compact/run',
-      '/multi/mod/compact/authorize',
-      '/multi/mod/compact/cancel',
-      ...(guardAuto ? ['/multi/permission'] : []),
+      '/openrouter/mod/session',
+      '/openrouter/mod/worker',
+      '/openrouter/mod/mode',
+      '/openrouter/mod/policy',
+      '/openrouter/mod/offer',
+      '/openrouter/mod/telemetry',
+      '/openrouter/mod/lifecycle',
+      '/openrouter/mod/usage',
+      '/openrouter/mod/usage/complete',
+      '/openrouter/mod/receipts',
+      '/openrouter/mod/detach',
+      '/openrouter/mod/compact/precompute',
+      '/openrouter/mod/compact/run',
+      '/openrouter/mod/compact/authorize',
+      '/openrouter/mod/compact/cancel',
+      ...(guardAuto ? ['/openrouter/permission'] : []),
     ].includes(url.pathname) ||
     !['POST', 'GET', 'HEAD'].includes(req.method ?? '')
   ) {
@@ -650,11 +660,11 @@ function failResponse(res: http.ServerResponse, emit: Emit, error: unknown) {
 }
 
 function assertProviderEnabled(model: string | null, enabled: readonly string[] | undefined) {
-  if (model && enabled && !enabled.includes(model.split('/')[1])) {
+  if (model && enabled && !enabled.includes('openrouter')) {
     throw new BadRequest('This provider plugin is not enabled for this session.');
   }
 }
 
 function externalModel(model: unknown) {
-  return typeof model === 'string' && model.startsWith('multi/') ? model : null;
+  return typeof model === 'string' && model.startsWith('openrouter/') ? model : null;
 }

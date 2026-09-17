@@ -17,7 +17,11 @@ export const register: Register = (on) => {
       return next(event);
     }
     const sessionId = await $.session.id();
-    const mode = await request($, {}, `/multi/mod/mode?sessionId=${encodeURIComponent(sessionId)}`);
+    const mode = await request(
+      $,
+      {},
+      `/openrouter/mod/mode?sessionId=${encodeURIComponent(sessionId)}`,
+    );
     if (mode?.generation === undefined) {
       return { skip: 'Multi compaction policy generation is unavailable.' };
     }
@@ -33,7 +37,7 @@ export const register: Register = (on) => {
       await precompute($, payload);
       return { skip: 'Multi summary preparation runs outside the hook budget.' };
     }
-    const result = await request($, payload, '/multi/mod/compact/authorize');
+    const result = await request($, payload, '/openrouter/mod/compact/authorize');
     if (result?.messages) {
       return { messages: result.messages };
     }
@@ -48,7 +52,7 @@ export const register: Register = (on) => {
         agentId: event.agentId,
         generation: mode.generation,
       },
-      '/multi/mod/compact/authorize',
+      '/openrouter/mod/compact/authorize',
     );
     if (!fallback?.allow) {
       return { skip: 'Multi tool-free compaction authorization was not acknowledged.' };
@@ -58,7 +62,7 @@ export const register: Register = (on) => {
 };
 
 async function precompute($: EngineInterface, payload: Record<string, unknown>) {
-  const prepared = await request($, payload, '/multi/mod/compact/precompute');
+  const prepared = await request($, payload, '/openrouter/mod/compact/precompute');
   if (prepared?.accepted && prepared.precomputeId) {
     void request(
       $,
@@ -68,24 +72,24 @@ async function precompute($: EngineInterface, payload: Record<string, unknown>) 
         generation: payload.generation,
         precomputeId: prepared.precomputeId,
       },
-      '/multi/mod/compact/run',
+      '/openrouter/mod/compact/run',
     );
   }
 }
 
 async function active($: EngineInterface): Promise<boolean> {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   return Boolean(base && token);
 }
 
 async function request(
   $: EngineInterface,
   payload: Record<string, unknown>,
-  route = '/multi/mod/session',
+  route = '/openrouter/mod/session',
 ) {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   if (!base || !token) {
     return undefined;
   }
@@ -97,7 +101,7 @@ async function request(
   try {
     const response = $.http.fetch(`${base}${route}`, {
       method: route.includes('?') ? 'GET' : 'POST',
-      headers: { 'content-type': 'application/json', 'x-multi-gateway-token': token },
+      headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
       ...(route.includes('?') ? {} : { body }),
     });
     const timeout = new Promise<never>((_, reject) => {

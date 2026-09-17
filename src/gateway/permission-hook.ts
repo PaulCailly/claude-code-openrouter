@@ -80,12 +80,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     permissionMode = input.permission_mode;
     // Record context in every mode: native plan mode can inherit automatic review.
     // Only an actual classifier request invokes the reviewer.
-    const response = await fetch(new URL('/multi/permission', process.env.ANTHROPIC_BASE_URL), {
-      method: 'POST',
-      headers: { 'x-multi-gateway-token': process.env.MULTI_GATEWAY_TOKEN ?? '' },
-      body: raw,
-      signal: AbortSignal.timeout(5000),
-    });
+    const response = await fetch(
+      new URL('/openrouter/permission', process.env.ANTHROPIC_BASE_URL),
+      {
+        method: 'POST',
+        headers: { 'x-openrouter-gateway-token': process.env.OPENROUTER_GATEWAY_TOKEN ?? '' },
+        body: raw,
+        signal: AbortSignal.timeout(5000),
+      },
+    );
     if (!response.ok) {
       throw new Error('Capability lookup failed');
     }

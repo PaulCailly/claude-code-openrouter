@@ -13,4 +13,4 @@ Run:
 
 Tell the user which providers are enabled and whether the helper is installed.
 This command does not test provider authentication or inference. If it is missing,
-tell the user to run `/multi-core:setup`. Never accept credentials in chat.
+tell the user to run `/openrouter:setup`. Never accept credentials in chat.

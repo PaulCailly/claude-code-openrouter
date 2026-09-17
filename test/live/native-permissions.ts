@@ -102,7 +102,7 @@ for (const model of models) {
           CODEX_HOME: process.env.CODEX_HOME,
           TERM: 'xterm-256color',
           CLAUDE_CONFIG_DIR: config,
-          MULTI_NATIVE_TRACE: '1',
+          OPENROUTER_NATIVE_TRACE: '1',
           CLAUDE_CODE_MAX_RETRIES: '0',
         }),
       },

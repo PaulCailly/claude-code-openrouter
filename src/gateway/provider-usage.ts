@@ -1,6 +1,6 @@
 import type { UsageSnapshot } from './receipts.ts';
 
-type UsageProvider = 'zen';
+type UsageProvider = 'openrouter';
 interface ProviderUsageRow {
   id: UsageProvider;
   name: string;
@@ -15,7 +15,7 @@ export interface ProviderUsageView {
 }
 interface ProviderUsageOptions {
   enabled: readonly string[];
-  zen?: ProviderUsageReader;
+  openrouter?: ProviderUsageReader;
   now?: () => number;
 }
 type ProviderUsageReader = (session: string) => Promise<{
@@ -23,11 +23,13 @@ type ProviderUsageReader = (session: string) => Promise<{
   details: string[];
   status?: ProviderUsageRow['status'];
 }>;
-const providers = [{ id: 'zen', name: 'OpenCode Zen', url: 'https://opencode.ai/zen' }] as const;
+const providers = [
+  { id: 'openrouter', name: 'OpenRouter', url: 'https://opencode.ai/openrouter' },
+] as const;
 const unavailable: Record<UsageProvider, string[]> = {
-  zen: [
-    'Go subscription quota requires a supported Zen API key.',
-    'Check the Zen billing console for credits and charges.',
+  openrouter: [
+    'Go subscription quota requires a supported OpenRouter API key.',
+    'Check the OpenRouter billing console for credits and charges.',
   ],
 };
 

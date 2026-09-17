@@ -15,22 +15,22 @@ test('provider dashboard reads every enabled provider and preserves unavailable 
     return { summary: `${provider} quota`, details: ['Account snapshot'] };
   };
   const dashboard = new ProviderUsageDashboard({
-    enabled: ['zen'],
-    zen: reader('zen'),
+    enabled: ['openrouter'],
+    openrouter: reader('openrouter'),
   });
   const result = await dashboard.read('owned', empty());
-  assert.deepEqual(calls.sort(), ['zen:owned']);
+  assert.deepEqual(calls.sort(), ['openrouter:owned']);
   assert.deepEqual(
     result.providers.map((row) => row.status),
     ['ready'],
   );
-  assert.equal(result.providers[0].summary, 'zen quota');
+  assert.equal(result.providers[0].summary, 'openrouter quota');
 });
 
 test('provider dashboard isolates errors and explicitly reports disabled and unsupported billing', async () => {
   const dashboard = new ProviderUsageDashboard({
-    enabled: ['zen'],
-    zen: async () => {
+    enabled: ['openrouter'],
+    openrouter: async () => {
       throw new Error('secret token');
     },
   });
@@ -47,9 +47,9 @@ test('provider dashboard coalesces reads, caches account data, refreshes and kee
   let calls = 0;
   let now = 0;
   const dashboard = new ProviderUsageDashboard({
-    enabled: ['zen'],
+    enabled: ['openrouter'],
     now: () => now,
-    zen: async (session) => {
+    openrouter: async (session) => {
       calls++;
       return { summary: session, details: [] };
     },
@@ -60,7 +60,11 @@ test('provider dashboard coalesces reads, caches account data, refreshes and kee
     dashboard.read('a', ledger.snapshot(), true),
   ]);
   assert.equal(calls, 1);
-  ledger.observe({ route: 'zen', session: 'a', usage: { input_tokens: 10, output_tokens: 20 } });
+  ledger.observe({
+    route: 'openrouter',
+    session: 'a',
+    usage: { input_tokens: 10, output_tokens: 20 },
+  });
   const cached = await dashboard.read('a', ledger.snapshot('a'));
   assert.equal(calls, 1);
   assert(cached.providers[0].details.includes('Tokens: 10 input · 20 output'));
@@ -78,8 +82,8 @@ test('provider dashboard coalesces reads, caches account data, refreshes and kee
 test('provider menu route is authenticated, session scoped and read-only', async (t) => {
   let reads = 0;
   const dashboard = new ProviderUsageDashboard({
-    enabled: ['zen'],
-    zen: async (session) => {
+    enabled: ['openrouter'],
+    openrouter: async (session) => {
       reads++;
       return { summary: session, details: [] };
     },
@@ -98,10 +102,10 @@ test('provider menu route is authenticated, session scoped and read-only', async
   });
   const address = server.address();
   assert(address && typeof address !== 'string');
-  const url = `http://127.0.0.1:${address.port}/multi/mod/usage?sessionId=owned&view=providers`;
+  const url = `http://127.0.0.1:${address.port}/openrouter/mod/usage?sessionId=owned&view=providers`;
   assert.equal((await fetch(url)).status, 401);
   assert.equal(reads, 0);
-  const response = await fetch(url, { headers: { 'x-multi-gateway-token': 'secret' } });
+  const response = await fetch(url, { headers: { 'x-openrouter-gateway-token': 'secret' } });
   assert.equal(response.status, 200);
   const body = (await response.json()) as ProviderUsageView;
   assert.equal(body.providers[0].summary, 'owned');

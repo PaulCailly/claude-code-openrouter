@@ -229,7 +229,7 @@ export async function pluginPermissions(
     if (typeof plugin.id !== 'string' || typeof plugin.installPath !== 'string') {
       throw new Error('Invalid enabled Claude plugin');
     }
-    multiCoreEnabled ||= plugin.id === 'multi-core@cc-multi-cli-plugin';
+    multiCoreEnabled ||= plugin.id === 'openrouter@cc-multi-cli-plugin';
     Object.assign(permissions, await pluginAgents(plugin.installPath, plugin.id.split('@')[0]));
   }
   return { permissions, multiCoreEnabled };

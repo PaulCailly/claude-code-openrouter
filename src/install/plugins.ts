@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { executableInvocation } from '../gateway/executable.ts';
 
 const MARKETPLACE = 'cc-multi-cli-plugin';
-const PROVIDERS = ['zen'] as const;
+const PROVIDERS = ['openrouter'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 interface Plugin {
@@ -75,13 +75,13 @@ export async function installedPlugins(
     }
   }
   const core = plugins.filter(
-    (plugin) => plugin.id === `multi-core@${MARKETPLACE}` && plugin.enabled,
+    (plugin) => plugin.id === `openrouter@${MARKETPLACE}` && plugin.enabled,
   );
   // Startup executes before the workspace trust prompt. Only a user-installed
   // core may supply executable code here; project providers are fixed opt-ins.
   const personalCore = core.filter((plugin) => plugin.scope === 'user');
   if (core.length && personalCore.length !== 1) {
-    throw new Error('Install multi-core at user scope before running Multi setup.');
+    throw new Error('Install openrouter at user scope before running Multi setup.');
   }
   const providers = PROVIDERS.filter((name) =>
     plugins.some((plugin) => plugin.id === `multi-${name}@${MARKETPLACE}` && plugin.enabled),

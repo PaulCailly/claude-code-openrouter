@@ -9,7 +9,7 @@ function gateway(held: number | undefined, calls: Call[]) {
   return {
     env: {
       get: async (name: string) =>
-        name === 'MULTI_MOD_GATEWAY_URL' ? 'http://127.0.0.1:4000' : 'test-token',
+        name === 'OPENROUTER_MOD_GATEWAY_URL' ? 'http://127.0.0.1:4000' : 'test-token',
     },
     http: {
       fetch: async (url: string, init: { body?: string }) => {
@@ -17,7 +17,7 @@ function gateway(held: number | undefined, calls: Call[]) {
         const body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : {};
         calls.push({ url: route, body });
         const ok = (value: unknown) => ({ ok: true, status: 200, text: JSON.stringify(value) });
-        if (route.startsWith('/multi/mod/mode?')) {
+        if (route.startsWith('/openrouter/mod/mode?')) {
           return held === undefined ? ok({}) : ok({ generation: held });
         }
         if (body.generation !== undefined) {
@@ -40,7 +40,7 @@ test('a reloaded hooks module adopts the mode generation the gateway still holds
   const calls: Call[] = [];
   const prepared = await preparePolicy(gateway(7, calls), 'session', '/workspace', undefined);
   expect(prepared).toEqual({ policyGeneration: 'policy-1', generation: 7 });
-  expect(calls.some((call) => call.url.startsWith('/multi/mod/mode?'))).toBe(true);
+  expect(calls.some((call) => call.url.startsWith('/openrouter/mod/mode?'))).toBe(true);
 });
 
 test('policy admission still fails when the gateway holds no generation to adopt', async () => {
@@ -54,5 +54,5 @@ test('a matching source generation never re-reads the gateway mode', async () =>
   const calls: Call[] = [];
   const prepared = await preparePolicy(gateway(4, calls), 'session', '/workspace', 4);
   expect(prepared).toEqual({ policyGeneration: 'policy-1', generation: 4 });
-  expect(calls.some((call) => call.url.startsWith('/multi/mod/mode?'))).toBe(false);
+  expect(calls.some((call) => call.url.startsWith('/openrouter/mod/mode?'))).toBe(false);
 });

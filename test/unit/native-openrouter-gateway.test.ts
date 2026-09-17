@@ -4,7 +4,7 @@ import type { GatewayFetch } from '../../src/gateway/fetch.ts';
 import type { GatewayOptions } from '../../src/gateway/server.ts';
 import { createNativeGateway } from '../../src/gateway/server.ts';
 
-const model = 'multi/zen/glm-5.3';
+const model = 'openrouter/glm-5.3';
 const request = {
   model,
   max_tokens: 1024,
@@ -14,7 +14,7 @@ const request = {
 };
 const headers = {
   'content-type': 'application/json',
-  'x-multi-gateway-token': 'local-fixture-token',
+  'x-openrouter-gateway-token': 'local-fixture-token',
   authorization: 'Bearer claude-secret-fixture',
   'x-api-key': 'anthropic-secret-fixture',
 };
@@ -29,16 +29,14 @@ test('disabled providers reject typed models and token counts without upstream r
     },
     { enabledProviders: [] },
   );
-  for (const provider of ['zen', 'openai', 'cursor', 'antigravity']) {
-    for (const endpoint of ['/v1/messages', '/v1/messages/count_tokens']) {
-      const response = await fetch(`${url}${endpoint}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...request, model: `multi/${provider}/test` }),
-      });
-      assert.equal(response.status, 400);
-      assert.match(await response.text(), /not enabled/);
-    }
+  for (const endpoint of ['/v1/messages', '/v1/messages/count_tokens']) {
+    const response = await fetch(`${url}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...request, model: 'openrouter/glm-5.3' }),
+    });
+    assert.equal(response.status, 400);
+    assert.match(await response.text(), /not enabled/);
   }
   assert.equal(requests, 0);
 });
@@ -76,7 +74,7 @@ async function gateway(
 ) {
   const server = createNativeGateway({
     token: 'local-fixture-token',
-    zen: { apiKey: 'zen-secret-fixture' },
+    openrouter: { apiKey: 'openrouter-secret-fixture' },
     blockAnthropic: true,
     fetchImpl,
     ...extra,
@@ -102,14 +100,14 @@ function post(base: string, body: unknown = request, extraHeaders = {}) {
   });
 }
 
-test('Zen isolates credentials, keeps cache affinity over restarts, and reports cache writes', async (t) => {
+test('OpenRouter isolates credentials, keeps cache affinity over restarts, and reports cache writes', async (t) => {
   const sent: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
   const upstream: GatewayFetch = async (url, init) => {
-    assert.equal(url, 'https://opencode.ai/zen/v1/chat/completions');
+    assert.equal(url, 'https://opencode.ai/openrouter/v1/chat/completions');
     assert.equal(init.redirect, 'error');
-    assert.equal(init.headers.authorization, 'Bearer zen-secret-fixture');
+    assert.equal(init.headers.authorization, 'Bearer openrouter-secret-fixture');
     assert.equal(init.headers['x-api-key'], undefined);
-    assert.equal(init.headers['x-multi-gateway-token'], undefined);
+    assert.equal(init.headers['x-openrouter-gateway-token'], undefined);
     assert(!JSON.stringify(init.headers).includes('claude-secret-fixture'));
     sent.push({ headers: init.headers, body: JSON.parse(String(init.body)) });
     return completion();
@@ -129,12 +127,12 @@ test('Zen isolates credentials, keeps cache affinity over restarts, and reports 
   assert.deepEqual(sent[0], sent[1]);
   assert.equal(sent[0].body.max_tokens, 1024);
   await (await post(restarted, request, { 'x-claude-code-agent-id': 'worker-one' })).arrayBuffer();
-  await (await post(restarted, { ...request, model: 'multi/zen/glm-5.2' })).arrayBuffer();
+  await (await post(restarted, { ...request, model: 'openrouter/glm-5.2' })).arrayBuffer();
   assert.notEqual(sent[0].headers['x-opencode-session'], sent[2].headers['x-opencode-session']);
   assert.notEqual(sent[0].headers['x-opencode-session'], sent[3].headers['x-opencode-session']);
 });
 
-test('Zen admission and counting never invoke inference; errors retain status without secrets or retries', async (t) => {
+test('OpenRouter admission and counting never invoke inference; errors retain status without secrets or retries', async (t) => {
   let calls = 0;
   const base = await gateway(t, async () => {
     calls++;
@@ -145,29 +143,29 @@ test('Zen admission and counting never invoke inference; errors retain status wi
     headers,
     body: JSON.stringify(request),
   });
-  assert.equal(counted.headers.get('x-multi-token-count'), 'estimate');
+  assert.equal(counted.headers.get('x-openrouter-token-count'), 'estimate');
   const count = await counted.json();
   assert(count && typeof count === 'object' && 'input_tokens' in count);
   assert(typeof count.input_tokens === 'number' && count.input_tokens > 0);
-  const bad = await post(base, { ...request, model: 'multi/zen/not-a-model' });
+  const bad = await post(base, { ...request, model: 'openrouter/not-a-model' });
   assert.equal(bad.status, 400);
   const missing = await gateway(
     t,
     async () => {
       throw new Error('Must not call');
     },
-    { zen: undefined },
+    { openrouter: undefined },
   );
   assert.equal((await post(missing)).status, 400);
   assert.equal(calls, 0);
   const failure = await post(base);
   assert.equal(failure.status, 429);
   assert.equal(failure.headers.get('retry-after'), '7');
-  assert.match(await failure.text(), /Zen returned HTTP 429/);
+  assert.match(await failure.text(), /OpenRouter returned HTTP 429/);
   assert.equal(calls, 1);
 });
 
-test('Zen client disconnect aborts the upstream fetch without replay', async (t) => {
+test('OpenRouter client disconnect aborts the upstream fetch without replay', async (t) => {
   const entered = Promise.withResolvers<void>();
   const aborted = Promise.withResolvers<void>();
   let calls = 0;
@@ -199,12 +197,12 @@ test('Zen client disconnect aborts the upstream fetch without replay', async (t)
   assert.equal(calls, 1);
 });
 
-test('Zen refuses invalid credential headers and missing terminal billing counts', async (t) => {
+test('OpenRouter refuses invalid credential headers and missing terminal billing counts', async (t) => {
   assert.throws(
     () =>
       createNativeGateway({
         token: 'fixture',
-        zen: { apiKey: 'secret\nvalue' },
+        openrouter: { apiKey: 'secret\nvalue' },
       }),
     (error: unknown) =>
       error instanceof Error && !error.message.includes('secret') && /API key/.test(error.message),

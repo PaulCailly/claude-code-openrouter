@@ -4,21 +4,21 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  readZenKey,
-  saveZenKey,
-  validateZenKey,
-  ZenAuthError,
-  zenAuthFile,
+  authFile,
+  OpenRouterAuthError,
+  readOpenRouterKey,
+  saveOpenRouterKey,
+  validateKey,
 } from '../../src/openrouter/auth.ts';
 import {
-  ZEN_MODELS,
-  ZEN_WORKERS,
-  zenModelOptions,
-  zenPickerOptions,
+  OPENROUTER_MODELS,
+  OPENROUTER_WORKERS,
+  openrouterModelOptions,
+  openrouterPickerOptions,
 } from '../../src/openrouter/models.ts';
 
 function hostAuthOptions(dataHome: string) {
-  const env: NodeJS.ProcessEnv = { OPENCODE_API_KEY: undefined };
+  const env: NodeJS.ProcessEnv = { OPENROUTER_API_KEY: undefined };
   if (process.platform === 'win32') {
     env.LOCALAPPDATA = dataHome;
   } else {
@@ -52,13 +52,13 @@ async function withEnvironment(
   }
 }
 
-test('Zen auth resolves Unix and Windows OpenCode data roots with explicit overrides', () => {
+test('OpenRouter auth resolves Unix and Windows OpenRouter data roots with explicit overrides', () => {
   assert.equal(
-    zenAuthFile({ platform: 'linux', homedir: '/home/test', env: {} }),
+    authFile({ platform: 'linux', homedir: '/home/test', env: {} }),
     '/home/test/.local/share/opencode/auth.json',
   );
   assert.equal(
-    zenAuthFile({
+    authFile({
       platform: 'darwin',
       homedir: '/Users/test',
       env: { XDG_DATA_HOME: '/custom/data' },
@@ -66,7 +66,7 @@ test('Zen auth resolves Unix and Windows OpenCode data roots with explicit overr
     '/custom/data/opencode/auth.json',
   );
   assert.equal(
-    zenAuthFile({
+    authFile({
       platform: 'win32',
       homedir: 'C:\\Users\\test',
       env: { LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local' },
@@ -74,7 +74,7 @@ test('Zen auth resolves Unix and Windows OpenCode data roots with explicit overr
     'C:\\Users\\test\\AppData\\Local\\opencode\\auth.json',
   );
   assert.equal(
-    zenAuthFile({
+    authFile({
       platform: 'win32',
       homedir: 'C:\\Users\\test',
       env: { OPENCODE_AUTH_FILE: 'D:\\auth.json' },
@@ -83,46 +83,46 @@ test('Zen auth resolves Unix and Windows OpenCode data roots with explicit overr
   );
 });
 
-test('Zen auth prefers an explicit API key without exposing its value', async () => {
+test('OpenRouter auth prefers an explicit API key without exposing its value', async () => {
   await withEnvironment(
-    { OPENCODE_API_KEY: 'fixture-key', XDG_DATA_HOME: '/missing' },
+    { OPENROUTER_API_KEY: 'fixture-key', XDG_DATA_HOME: '/missing' },
     async () => {
-      assert.equal(await readZenKey(), 'fixture-key');
+      assert.equal(await readOpenRouterKey(), 'fixture-key');
     },
   );
 });
 
-test('Zen key validation rejects whitespace, controls, and non-ASCII without echoing input', async () => {
+test('OpenRouter key validation rejects whitespace, controls, and non-ASCII without echoing input', async () => {
   for (const value of ['', 'fixture key', 'fixture\nkey', 'fixture\tkey', 'clé']) {
     assert.throws(
-      () => validateZenKey(value),
-      (error: unknown) => error instanceof ZenAuthError,
+      () => validateKey(value),
+      (error: unknown) => error instanceof OpenRouterAuthError,
     );
   }
   assert.throws(
-    () => validateZenKey('fixture\nSECRET_INVALID_KEY'),
+    () => validateKey('fixture\nSECRET_INVALID_KEY'),
     (error: unknown) =>
-      error instanceof ZenAuthError && !error.message.includes('SECRET_INVALID_KEY'),
+      error instanceof OpenRouterAuthError && !error.message.includes('SECRET_INVALID_KEY'),
   );
-  assert.equal(validateZenKey('visible-ASCII_fixture.key'), 'visible-ASCII_fixture.key');
+  assert.equal(validateKey('visible-ASCII_fixture.key'), 'visible-ASCII_fixture.key');
 });
 
-test('an explicit Zen env key prevents reading saved auth', async (t) => {
-  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'zen-auth-test-'));
+test('an explicit OpenRouter env key prevents reading saved auth', async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'openrouter-auth-test-'));
   t.after(() => rm(dataHome, { recursive: true, force: true }));
   const directory = path.join(dataHome, 'opencode');
   await mkdir(directory);
   await writeFile(path.join(directory, 'auth.json'), '{malformed');
   await withEnvironment(
-    { OPENCODE_API_KEY: 'env-fixture-key', XDG_DATA_HOME: dataHome },
+    { OPENROUTER_API_KEY: 'env-fixture-key', XDG_DATA_HOME: dataHome },
     async () => {
-      assert.equal(await readZenKey(), 'env-fixture-key');
+      assert.equal(await readOpenRouterKey(), 'env-fixture-key');
     },
   );
 });
 
-test('Zen auth reads only the official OpenCode API entry', async (t) => {
-  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'zen-auth-test-'));
+test('OpenRouter auth reads only the official OpenRouter API entry', async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'openrouter-auth-test-'));
   t.after(() => rm(dataHome, { recursive: true, force: true }));
   const directory = path.join(dataHome, 'opencode');
   await mkdir(directory);
@@ -132,29 +132,29 @@ test('Zen auth reads only the official OpenCode API entry', async (t) => {
   );
   const options = hostAuthOptions(dataHome);
   await withEnvironment(options.env, async () => {
-    assert.equal(await readZenKey(options), 'saved-fixture-key');
+    assert.equal(await readOpenRouterKey(options), 'saved-fixture-key');
   });
 });
 
-test('Zen auth treats missing credentials as optional and rejects malformed explicit config', async (t) => {
-  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'zen-auth-test-'));
+test('OpenRouter auth treats missing credentials as optional and rejects malformed explicit config', async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'openrouter-auth-test-'));
   t.after(() => rm(dataHome, { recursive: true, force: true }));
   const options = hostAuthOptions(dataHome);
   await withEnvironment(options.env, async () => {
     const environmentOptions = { platform: options.platform, env: process.env };
-    assert.equal(await readZenKey(environmentOptions), undefined);
+    assert.equal(await readOpenRouterKey(environmentOptions), undefined);
     for (const value of [' ', 'fixture key', 'fixture\nkey']) {
-      process.env.OPENCODE_API_KEY = value;
-      await assert.rejects(readZenKey(environmentOptions), (error: unknown) => {
-        assert(error instanceof ZenAuthError);
+      process.env.OPENROUTER_API_KEY = value;
+      await assert.rejects(readOpenRouterKey(environmentOptions), (error: unknown) => {
+        assert(error instanceof OpenRouterAuthError);
         return true;
       });
     }
   });
 });
 
-test('Zen auth rejects malformed saved credentials without including secrets', async (t) => {
-  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'zen-auth-test-'));
+test('OpenRouter auth rejects malformed saved credentials without including secrets', async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'openrouter-auth-test-'));
   t.after(() => rm(dataHome, { recursive: true, force: true }));
   const directory = path.join(dataHome, 'opencode');
   await mkdir(directory);
@@ -162,15 +162,15 @@ test('Zen auth rejects malformed saved credentials without including secrets', a
   const options = hostAuthOptions(dataHome);
   await withEnvironment(options.env, async () => {
     await assert.rejects(
-      readZenKey(options),
-      (error: unknown) => error instanceof ZenAuthError && !error.message.includes('SECRET'),
+      readOpenRouterKey(options),
+      (error: unknown) => error instanceof OpenRouterAuthError && !error.message.includes('SECRET'),
     );
   });
 });
 
-test('Zen catalog exposes bounded protocols and only supported effort workers', () => {
+test('OpenRouter catalog exposes bounded protocols and only supported effort workers', () => {
   assert.deepEqual(
-    ZEN_MODELS.map((model) => [model.id, model.protocol]),
+    OPENROUTER_MODELS.map((model) => [model.id, model.protocol]),
     [
       ['gpt-5.6-luna', 'responses'],
       ['gpt-5.6-terra', 'responses'],
@@ -193,16 +193,16 @@ test('Zen catalog exposes bounded protocols and only supported effort workers', 
       ['muse-spark-1.3', 'responses'],
     ],
   );
-  assert.equal(zenModelOptions(['big-pickle'])[0].model, 'multi/zen/big-pickle');
-  assert.equal(ZEN_WORKERS['zen-big-pickle'].effort, undefined);
-  assert.equal(ZEN_WORKERS['zen-gpt-5.6-luna'].effort, 'medium');
-  assert.equal(ZEN_WORKERS['zen-gpt-5.6-luna-high'].effort, 'high');
-  assert.equal(ZEN_WORKERS['zen-gpt-5.6-luna-impossible'], undefined);
+  assert.equal(openrouterModelOptions(['big-pickle'])[0].model, 'openrouter/big-pickle');
+  assert.equal(OPENROUTER_WORKERS['openrouter-big-pickle'].effort, undefined);
+  assert.equal(OPENROUTER_WORKERS['openrouter-gpt-5.6-luna'].effort, 'medium');
+  assert.equal(OPENROUTER_WORKERS['openrouter-gpt-5.6-luna-high'].effort, 'high');
+  assert.equal(OPENROUTER_WORKERS['openrouter-gpt-5.6-luna-impossible'], undefined);
 });
 
-test('Zen picker allowlist preserves order and validates model IDs', () => {
+test('OpenRouter picker allowlist preserves order and validates model IDs', () => {
   assert.deepEqual(
-    zenPickerOptions(undefined).map((model) => model.id),
+    openrouterPickerOptions(undefined).map((model) => model.id),
     [
       'deepseek-v4-pro',
       'deepseek-v4-flash',
@@ -212,16 +212,19 @@ test('Zen picker allowlist preserves order and validates model IDs', () => {
       'muse-spark-1.3',
     ],
   );
-  assert.deepEqual(zenPickerOptions(''), []);
+  assert.deepEqual(openrouterPickerOptions(''), []);
   assert.deepEqual(
-    zenPickerOptions(' mimo-v2.5-free, big-pickle,mimo-v2.5-free ').map((model) => model.id),
+    openrouterPickerOptions(' mimo-v2.5-free, big-pickle,mimo-v2.5-free ').map((model) => model.id),
     ['mimo-v2.5-free', 'big-pickle'],
   );
-  assert.throws(() => zenPickerOptions('typo'), /MULTI_ZEN_MODELS: unknown Zen model/);
+  assert.throws(
+    () => openrouterPickerOptions('typo'),
+    /OPENROUTER_MODELS: unknown OpenRouter model/,
+  );
 });
 
-test('Zen local key entry preserves other accounts and writes a private auth file', async (t) => {
-  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'zen-connect-test-'));
+test('OpenRouter local key entry preserves other accounts and writes a private auth file', async (t) => {
+  const dataHome = await mkdtemp(path.join(os.tmpdir(), 'openrouter-connect-test-'));
   t.after(() => rm(dataHome, { recursive: true, force: true }));
   const directory = path.join(dataHome, 'opencode');
   await mkdir(directory);
@@ -229,14 +232,14 @@ test('Zen local key entry preserves other accounts and writes a private auth fil
   await writeFile(file, JSON.stringify({ other: { type: 'api', key: 'other-fixture' } }));
   const options = hostAuthOptions(dataHome);
   await withEnvironment(options.env, async () => {
-    await saveZenKey('new-fixture', options);
-    assert.equal(await readZenKey(options), 'new-fixture');
+    await saveOpenRouterKey('new-fixture', options);
+    assert.equal(await readOpenRouterKey(options), 'new-fixture');
     assert.equal(JSON.parse(await readFile(file, 'utf8')).other.key, 'other-fixture');
     if (process.platform !== 'win32') {
       assert.equal((await stat(file)).mode & 0o777, 0o600);
     }
     await writeFile(file, 'invalid-json');
-    await assert.rejects(saveZenKey('next-fixture', options), /preserved/);
+    await assert.rejects(saveOpenRouterKey('next-fixture', options), /preserved/);
     assert.equal(await readFile(file, 'utf8'), 'invalid-json');
   });
 });

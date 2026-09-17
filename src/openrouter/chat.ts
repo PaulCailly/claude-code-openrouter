@@ -9,7 +9,7 @@ import type {
 import { prefixSafeLength, readSse } from '../gateway/sse.ts';
 import { callId, toolName } from '../gateway/tools.ts';
 
-const SIGNATURE_PREFIX = 'multi-zen-chat:';
+const SIGNATURE_PREFIX = 'openrouter-chat:';
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 export interface ChatRequest {
@@ -172,7 +172,7 @@ function signature(model: string, reasoning: string): string {
 }
 
 function canonicalModel(model: string): string {
-  return model.replace(/^multi\/zen\//, '');
+  return model.replace(/^multi\/openrouter\//, '');
 }
 
 function ownReasoning(model: string, block: ContentBlock): string | undefined {
@@ -180,7 +180,7 @@ function ownReasoning(model: string, block: ContentBlock): string | undefined {
     return undefined;
   }
   if (block.thinking !== undefined && typeof block.thinking !== 'string') {
-    throw new Error('Invalid Zen reasoning content');
+    throw new Error('Invalid OpenRouter reasoning content');
   }
   const prefix = `${SIGNATURE_PREFIX}${canonicalModel(model)}:`;
   if (!block.signature.startsWith(prefix)) {
@@ -194,9 +194,9 @@ function ownReasoning(model: string, block: ContentBlock): string | undefined {
       return decoded.reasoning;
     }
   } catch {
-    throw new Error('Invalid Zen reasoning signature');
+    throw new Error('Invalid OpenRouter reasoning signature');
   }
-  throw new Error('Invalid Zen reasoning signature');
+  throw new Error('Invalid OpenRouter reasoning signature');
 }
 
 function assistantMessage(message: ContentBlock[], model: string): ChatMessage | undefined {
@@ -531,7 +531,7 @@ function delta(value: unknown): ChatDelta {
     return {};
   }
   if (!record(value)) {
-    throw new Error('Malformed Zen Chat choice');
+    throw new Error('Malformed OpenRouter Chat choice');
   }
   for (const key of ['content', 'reasoning_content']) {
     if (value[key] !== undefined && value[key] !== null && typeof value[key] !== 'string') {
@@ -562,9 +562,9 @@ function finishReason(value: unknown): StopReason | undefined {
     return 'max_tokens';
   }
   if (value === 'content_filter') {
-    throw new Error('Zen Chat response was filtered');
+    throw new Error('OpenRouter Chat response was filtered');
   }
-  throw new Error(`Unsupported Zen Chat finish reason: ${String(value)}`);
+  throw new Error(`Unsupported OpenRouter Chat finish reason: ${String(value)}`);
 }
 
 export interface ChatResponseOptions {
@@ -600,7 +600,7 @@ class ChatAccumulator {
 
   accept(value: unknown) {
     if (!record(value)) {
-      throw new Error('Malformed Zen Chat event');
+      throw new Error('Malformed OpenRouter Chat event');
     }
     const event = value as ChatEvent;
     this.acceptError(event.error);
@@ -618,7 +618,9 @@ class ChatAccumulator {
       return;
     }
     throw new Error(
-      record(error) && typeof error.message === 'string' ? error.message : 'Zen Chat stream failed',
+      record(error) && typeof error.message === 'string'
+        ? error.message
+        : 'OpenRouter Chat stream failed',
     );
   }
 
@@ -627,28 +629,28 @@ class ChatAccumulator {
       return;
     }
     if (!validUsage(value)) {
-      throw new Error('Malformed Zen Chat usage');
+      throw new Error('Malformed OpenRouter Chat usage');
     }
-    // Zen forwards cumulative usage snapshots; the last snapshot is authoritative.
+    // OpenRouter forwards cumulative usage snapshots; the last snapshot is authoritative.
     this.usageValue = value;
   }
 
   private acceptChoice(value: unknown) {
     if (!Array.isArray(value) || value.length > 1) {
-      throw new Error('Zen Chat returned multiple choices');
+      throw new Error('OpenRouter Chat returned multiple choices');
     }
     if (value.length === 0) {
       return;
     }
     const choice = value[0];
     if (!record(choice)) {
-      throw new Error('Malformed Zen Chat choice');
+      throw new Error('Malformed OpenRouter Chat choice');
     }
     if (choice.index !== undefined && choice.index !== 0) {
-      throw new Error('Zen Chat returned a non-primary choice');
+      throw new Error('OpenRouter Chat returned a non-primary choice');
     }
     if (this.ended) {
-      throw new Error('Zen Chat emitted data after completion');
+      throw new Error('OpenRouter Chat emitted data after completion');
     }
     const item = delta(choice.delta);
     this.addReasoning(item.reasoning_content);
@@ -657,7 +659,7 @@ class ChatAccumulator {
     const stop = finishReason(choice.finish_reason);
     if (stop !== undefined) {
       if (this.stop !== undefined && this.stop !== 'stop_sequence' && this.stop !== stop) {
-        throw new Error('Zen Chat changed finish reason');
+        throw new Error('OpenRouter Chat changed finish reason');
       }
       if (this.stop === undefined) {
         this.stop = stop;
@@ -669,7 +671,7 @@ class ChatAccumulator {
   private start(eventId: string) {
     if (this.started) {
       if (this.id !== eventId) {
-        throw new Error('Zen Chat response ID changed');
+        throw new Error('OpenRouter Chat response ID changed');
       }
       return;
     }
@@ -797,7 +799,7 @@ class ChatAccumulator {
 
   private toolSlot(raw: unknown): ToolSlot {
     if (!record(raw) || !Number.isSafeInteger(raw.index) || Number(raw.index) < 0) {
-      throw new Error('Malformed Zen tool call delta');
+      throw new Error('Malformed OpenRouter tool call delta');
     }
     const index = Number(raw.index);
     let slot = this.slots.get(index);
@@ -806,7 +808,7 @@ class ChatAccumulator {
       this.slots.set(index, slot);
     }
     if (slot.closed) {
-      throw new Error('Zen tool call continued after completion');
+      throw new Error('OpenRouter tool call continued after completion');
     }
     this.updateTool(slot, raw);
     return slot;
@@ -816,7 +818,7 @@ class ChatAccumulator {
     if (raw.id !== undefined && raw.id !== null) {
       const id = string(raw.id, 'tool call ID');
       if (slot.id !== undefined && slot.id !== id) {
-        throw new Error('Zen tool call ID changed');
+        throw new Error('OpenRouter tool call ID changed');
       }
       slot.id = id;
     }
@@ -825,12 +827,12 @@ class ChatAccumulator {
       return;
     }
     if (!record(fn)) {
-      throw new Error('Malformed Zen function delta');
+      throw new Error('Malformed OpenRouter function delta');
     }
     if (fn.name !== undefined && fn.name !== null) {
       const name = string(fn.name, 'tool name');
       if (slot.name !== undefined && slot.name !== name) {
-        throw new Error('Zen tool name changed');
+        throw new Error('OpenRouter tool name changed');
       }
       slot.name = name;
     }
@@ -841,21 +843,21 @@ class ChatAccumulator {
 
   finish(): MessagesResponse {
     if (!this.started || !this.id) {
-      throw new Error('Zen Chat stream omitted response ID');
+      throw new Error('OpenRouter Chat stream omitted response ID');
     }
     if (!this.stop) {
-      throw new Error('Zen Chat stream ended before completion');
+      throw new Error('OpenRouter Chat stream ended before completion');
     }
     if (
       !this.usageValue ||
       this.usageValue.prompt_tokens === undefined ||
       this.usageValue.completion_tokens === undefined
     ) {
-      throw new Error('Zen Chat omitted terminal usage');
+      throw new Error('OpenRouter Chat omitted terminal usage');
     }
     this.flushText();
     if (this.stop === 'tool_use' && this.slots.size === 0) {
-      throw new Error('Zen Chat promised tool calls but emitted none');
+      throw new Error('OpenRouter Chat promised tool calls but emitted none');
     }
     if (this.stop === 'end_turn' && this.slots.size > 0) {
       this.stop = 'tool_use';
@@ -863,7 +865,7 @@ class ChatAccumulator {
     this.finishStreamedBlocks();
     this.finishTools();
     if (!this.content.length) {
-      throw new Error('Zen Chat completed with no content');
+      throw new Error('OpenRouter Chat completed with no content');
     }
     const resultUsage = usage(this.usageValue);
     const stopSequence = this.stoppedSequence;
@@ -893,16 +895,16 @@ class ChatAccumulator {
   private finishTools() {
     for (const slot of [...this.slots.values()].sort((left, right) => left.index - right.index)) {
       if (!slot.id || !slot.name) {
-        throw new Error('Zen Chat returned an incomplete tool call');
+        throw new Error('OpenRouter Chat returned an incomplete tool call');
       }
       let input: unknown;
       try {
         input = JSON.parse(slot.arguments);
       } catch {
-        throw new Error('Zen Chat returned invalid tool arguments');
+        throw new Error('OpenRouter Chat returned invalid tool arguments');
       }
       if (!record(input)) {
-        throw new Error('Zen Chat tool arguments must be an object');
+        throw new Error('OpenRouter Chat tool arguments must be an object');
       }
       const block: Extract<ResponseContentBlock, { type: 'tool_use' }> = {
         type: 'tool_use',
@@ -911,10 +913,10 @@ class ChatAccumulator {
         input,
       };
       if (this.options.toolNames && !this.options.toolNames.has(slot.name)) {
-        throw new Error('Zen returned an undeclared tool');
+        throw new Error('OpenRouter returned an undeclared tool');
       }
       if (this.content.some((item) => item.type === 'tool_use' && item.id === block.id)) {
-        throw new Error('Zen repeated a tool call ID');
+        throw new Error('OpenRouter repeated a tool call ID');
       }
       const index = this.content.length;
       this.content.push(block);

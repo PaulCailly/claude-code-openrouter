@@ -14,28 +14,28 @@ async function dispatch(state: Installation, args: string[], management: boolean
   if (!management && (!root || providers.length === 0)) {
     return run(state.claude, args);
   }
-  if (!management && state.command === 'claude' && process.env.MULTI_GATEWAY_TOKEN) {
+  if (!management && state.command === 'claude' && process.env.OPENROUTER_GATEWAY_TOKEN) {
     // A launch command named `claude` also catches Claude's own nested runs (agents
     // calling `claude -p`, SDK spawns, hooks). Inside a Multi session those must
     // reach the real executable rather than start a second gateway.
     return run(state.claude, args);
   }
   if (!root) {
-    throw new Error('Enable multi-core at user scope before using Multi commands.');
+    throw new Error('Enable openrouter at user scope before using Multi commands.');
   }
   const manifest = JSON.parse(
     await readFile(path.join(root, '.claude-plugin', 'plugin.json'), 'utf8'),
   );
-  if (manifest.name !== 'multi-core') {
-    throw new Error('Installed core manifest does not identify multi-core');
+  if (manifest.name !== 'openrouter') {
+    throw new Error('Installed core manifest does not identify openrouter');
   }
   const env = {
     ...process.env,
-    ...(state.models !== undefined && process.env.MULTI_MODELS === undefined
-      ? { MULTI_MODELS: state.models }
+    ...(state.models !== undefined && process.env.OPENROUTER_MODELS === undefined
+      ? { OPENROUTER_MODELS: state.models }
       : {}),
-    MULTI_REAL_CLAUDE: state.claude,
-    MULTI_ENABLED_PROVIDERS: providers.join(','),
+    OPENROUTER_REAL_CLAUDE: state.claude,
+    OPENROUTER_ENABLED_PROVIDERS: providers.join(','),
   };
   const entry = management ? 'account.ts' : 'launcher.ts';
   return run(state.node, [path.join(root, 'src', entry), ...args], {

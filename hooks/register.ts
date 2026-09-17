@@ -51,7 +51,7 @@ export const register: Register = (on, options) => {
       description: 'Open provider quotas, spend, and session receipts.',
       immediate: true,
     });
-    const response = await request($, '/multi/mod/session', {
+    const response = await request($, '/openrouter/mod/session', {
       sessionId: await $.session.id(),
       cwd: await $.session.cwd(),
       model: await $.session.model(),
@@ -69,7 +69,7 @@ export const register: Register = (on, options) => {
       return { block: 'Multi policy is not ready; submit the prompt again.' };
     }
     generation = prepared.generation;
-    const response = await request($, '/multi/mod/session', {
+    const response = await request($, '/openrouter/mod/session', {
       policyGeneration: prepared.policyGeneration,
       sessionId: event.session_id,
       cwd: event.cwd,
@@ -102,7 +102,7 @@ export const register: Register = (on, options) => {
       return next(event);
     }
     generation = prepared.generation;
-    const response = await request($, '/multi/mod/session', {
+    const response = await request($, '/openrouter/mod/session', {
       policyGeneration: prepared.policyGeneration,
       sessionId: event.session_id,
       cwd: event.cwd,
@@ -119,14 +119,14 @@ export const register: Register = (on, options) => {
 };
 
 async function active($: EngineInterface): Promise<boolean> {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   return Boolean(base && token);
 }
 
 async function request($: EngineInterface, route: string, payload: Record<string, unknown>) {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   if (!base || !token) {
     return undefined;
   }
@@ -134,12 +134,13 @@ async function request($: EngineInterface, route: string, payload: Record<string
   if (encodeURIComponent(body).replace(/%[A-F\d]{2}/gi, 'x').length > maxBody) {
     return undefined;
   }
-  const isGet = route.startsWith('/multi/mod/display?') || route.startsWith('/multi/mod/mode?');
+  const isGet =
+    route.startsWith('/openrouter/mod/display?') || route.startsWith('/openrouter/mod/mode?');
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const response = $.http.fetch(`${base}${route}`, {
       method: isGet ? 'GET' : 'POST',
-      headers: { 'content-type': 'application/json', 'x-multi-gateway-token': token },
+      headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
       ...(isGet ? {} : { body }),
     });
     const timeout = new Promise<never>((_, reject) => {
@@ -180,7 +181,7 @@ export async function preparePolicy(
   sourceGeneration: number | undefined,
 ): Promise<PolicyHandoff | undefined> {
   let generation = sourceGeneration;
-  let started = await request($, '/multi/mod/policy', { sessionId, cwd, sourceGeneration });
+  let started = await request($, '/openrouter/mod/policy', { sessionId, cwd, sourceGeneration });
   if (started?.refused) {
     // A reloaded hooks module forgets the mode generation the gateway still holds,
     // and every later prompt would read stale. Adopt the gateway's own value once.
@@ -189,7 +190,7 @@ export async function preparePolicy(
       return undefined;
     }
     generation = resynced;
-    started = await request($, '/multi/mod/policy', {
+    started = await request($, '/openrouter/mod/policy', {
       sessionId,
       cwd,
       sourceGeneration: generation,
@@ -207,7 +208,7 @@ async function awaitPolicy($: EngineInterface, sessionId: string, generation: st
   // cold Windows start that takes several seconds. Stay under the 10 s hook budget.
   const deadline = Date.now() + 8000;
   while (Date.now() < deadline) {
-    const result = await request($, '/multi/mod/policy', { sessionId, generation });
+    const result = await request($, '/openrouter/mod/policy', { sessionId, generation });
     if (result?.status === 'ready') {
       return generation;
     }
@@ -220,6 +221,10 @@ async function awaitPolicy($: EngineInterface, sessionId: string, generation: st
 }
 
 async function modeGeneration($: EngineInterface, sessionId: string) {
-  const mode = await request($, `/multi/mod/mode?sessionId=${encodeURIComponent(sessionId)}`, {});
+  const mode = await request(
+    $,
+    `/openrouter/mod/mode?sessionId=${encodeURIComponent(sessionId)}`,
+    {},
+  );
   return typeof mode?.generation === 'number' ? mode.generation : undefined;
 }

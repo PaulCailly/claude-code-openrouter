@@ -42,7 +42,7 @@ try {
     const response = await fetch(`http://127.0.0.1:${address.port}/v1/messages`, {
       method: 'POST',
       signal: AbortSignal.timeout(180000),
-      headers: { 'content-type': 'application/json', 'x-multi-gateway-token': token },
+      headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
       body: JSON.stringify({
         model: 'multi/openai/gpt-5.6-luna',
         stream: false,
@@ -124,7 +124,7 @@ try {
   const response = await fetch(`http://127.0.0.1:${address.port}/v1/messages`, {
     method: 'POST',
     signal: AbortSignal.timeout(180000),
-    headers: { 'content-type': 'application/json', 'x-multi-gateway-token': token },
+    headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
     body: JSON.stringify({
       model: 'multi/openai/gpt-5.6-luna',
       stream: false,

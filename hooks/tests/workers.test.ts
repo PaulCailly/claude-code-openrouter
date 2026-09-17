@@ -7,7 +7,7 @@ test('registers the worker admission hook', () => {
 
 test('agent.offer hides an unsupported worker before dispatch', async ($, on) => {
   on('env.get', (_$, event) => ({
-    value: event.name === 'MULTI_GATEWAY_TOKEN' ? 'token' : 'http://127.0.0.1:4000',
+    value: event.name === 'OPENROUTER_GATEWAY_TOKEN' ? 'token' : 'http://127.0.0.1:4000',
   }));
   on('session.id', () => ({ value: 's' }));
   on('session.cwd', () => ({ value: '/workspace' }));
@@ -26,7 +26,7 @@ test('agent.offer hides an unsupported worker before dispatch', async ($, on) =>
 
 test('agent.offer preserves a known catalog worker', async ($, on) => {
   on('env.get', (_$, event) => ({
-    value: event.name === 'MULTI_GATEWAY_TOKEN' ? 'token' : 'http://127.0.0.1:4000',
+    value: event.name === 'OPENROUTER_GATEWAY_TOKEN' ? 'token' : 'http://127.0.0.1:4000',
   }));
   on('session.id', () => ({ value: 's' }));
   on('session.cwd', () => ({ value: '/workspace' }));
@@ -35,7 +35,7 @@ test('agent.offer preserves a known catalog worker', async ($, on) => {
   }));
   on('agent.offer', () => ({ isOffered: true }));
   const result = await $.agent.offer({
-    agent: 'zen-worker',
+    agent: 'openrouter-worker',
     description: 'known',
     source: 'plugin',
     provider: { plugin: 'engine', tier: 'core' },
@@ -53,7 +53,7 @@ test('worker spawn is denied when gateway admission is unavailable', async ($, o
     started = true;
     return { model: 'm', agentId: 'worker' };
   });
-  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'zen-worker' });
+  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'openrouter-worker' });
   expect(typeof result.deny).toBe('string');
   expect(started).toBe(false);
 });
@@ -77,7 +77,7 @@ test('a refused spawn shows the gateway reason instead of the generic denial', a
     started = true;
     return { model: 'm', agentId: 'worker' };
   });
-  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'zen-worker' });
+  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'openrouter-worker' });
   expect(result.deny).toBe('Claude permission mode is unavailable; submit a new prompt');
   expect(started).toBe(false);
 });
@@ -90,7 +90,7 @@ test('a non-JSON gateway refusal still names the status in the denial', async ($
     value: { ok: false, status: 502, headers: {}, text: 'upstream failure' },
   }));
   on('agent.spawn', () => ({ model: 'm', agentId: 'worker' }));
-  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'zen-worker' });
+  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'openrouter-worker' });
   expect(result.deny).toBe('gateway 502: upstream failure');
 });
 
@@ -114,7 +114,7 @@ test('a refused reply cannot acknowledge a spawn through its body', async ($, on
     started = true;
     return { model: 'm', agentId: 'worker' };
   });
-  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'zen-worker' });
+  const result = await $.agent.spawn({ prompt: 'task', subagentType: 'openrouter-worker' });
   expect(result.deny).toBe('policy refused');
   expect(started).toBe(false);
 });

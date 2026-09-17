@@ -31,7 +31,7 @@ export async function usageRoute(
   billedUsage?: (session: string) => Promise<unknown>,
   dashboard?: ProviderUsageDashboard,
 ) {
-  if (url.pathname === '/multi/mod/usage/complete') {
+  if (url.pathname === '/openrouter/mod/usage/complete') {
     if (req.method !== 'POST' || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('Usage completion requires POST with an object');
     }
@@ -50,7 +50,7 @@ export async function usageRoute(
     throw new Error('Usage query requires GET');
   }
   const session = identifier(url.searchParams.get('sessionId'), 'sessionId');
-  if (url.pathname === '/multi/mod/receipts') {
+  if (url.pathname === '/openrouter/mod/receipts') {
     return { receipts: ledger.recent(session) };
   }
   if (url.searchParams.get('view') === 'providers') {

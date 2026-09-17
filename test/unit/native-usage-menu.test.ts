@@ -9,8 +9,8 @@ const dashboard = {
   updatedAt: 'today',
   providers: [
     {
-      id: 'zen',
-      name: 'Zen',
+      id: 'openrouter',
+      name: 'OpenRouter',
       status: 'ready',
       summary: '$0.00 charged',
       details: ['native spend'],
@@ -22,7 +22,8 @@ test('usage client messages refresh props and receipts without losing providers 
   const requests: string[] = [];
   const engine = {
     env: {
-      get: async (name: string) => (name === 'MULTI_GATEWAY_TOKEN' ? 'secret' : 'http://localhost'),
+      get: async (name: string) =>
+        name === 'OPENROUTER_GATEWAY_TOKEN' ? 'secret' : 'http://localhost',
     },
     session: { id: async () => 'session/one' },
     http: {
@@ -118,7 +119,7 @@ test('usage Client supports provider navigation, receipts and refresh without mo
   keyHandler?.({ key: 'r' });
   assert.deepEqual(posts.at(-1), { action: 'receipts' });
   keyHandler?.({ key: 'left' });
-  assert.equal(state?.selected, 'zen');
+  assert.equal(state?.selected, 'openrouter');
   const providerTree = view(dashboard, surface);
   assert(JSON.stringify(providerTree).includes('native spend'));
   keyHandler?.({ key: 'r' });
@@ -132,7 +133,8 @@ test('quota advice is opt-in, session scoped, advisory and removed on detach', a
   let available = true;
   const engine = {
     env: {
-      get: async (name: string) => (name === 'MULTI_GATEWAY_TOKEN' ? 'secret' : 'http://localhost'),
+      get: async (name: string) =>
+        name === 'OPENROUTER_GATEWAY_TOKEN' ? 'secret' : 'http://localhost',
     },
     session: { id: async () => session },
     http: {

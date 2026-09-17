@@ -2,18 +2,18 @@ import { expect, mock, test } from 'claude-code/testing';
 
 test('usage command reads only the current session without model dispatch', async ($, on) => {
   mock.env(on, {
-    MULTI_GATEWAY_TOKEN: 'secret',
-    MULTI_MOD_GATEWAY_URL: 'http://127.0.0.1:4000',
+    OPENROUTER_GATEWAY_TOKEN: 'secret',
+    OPENROUTER_MOD_GATEWAY_URL: 'http://127.0.0.1:4000',
   });
   on('session.id', () => ({ value: 'session/one' }));
   on('ui.open', () => ({ value: undefined }));
   on('ui.invalidate', () => ({ value: undefined }));
   on('http.fetch', (_$, event) => {
     expect(event.url).toBe(
-      'http://127.0.0.1:4000/multi/mod/usage?sessionId=session%2Fone&view=providers',
+      'http://127.0.0.1:4000/openrouter/mod/usage?sessionId=session%2Fone&view=providers',
     );
     expect(event.init?.method).toBe('GET');
-    expect(event.init?.headers?.['x-multi-gateway-token']).toBe('secret');
+    expect(event.init?.headers?.['x-openrouter-gateway-token']).toBe('secret');
     return {
       value: {
         ok: true,
@@ -23,8 +23,8 @@ test('usage command reads only the current session without model dispatch', asyn
           updatedAt: '2026-09-16T12:00:00Z',
           providers: [
             {
-              id: 'zen',
-              name: 'Zen',
+              id: 'openrouter',
+              name: 'OpenRouter',
               status: 'ready',
               summary: '10 tokens',
               details: ['input 6', 'output 4'],
@@ -43,18 +43,18 @@ test('usage command reads only the current session without model dispatch', asyn
     props: { title: 'Multi usage', isFocused: true, bodyColumns: 80 },
   });
   expect(JSON.stringify(rendered)).toContain('usage-view.ts');
-  expect(JSON.stringify(rendered)).toContain('Zen');
+  expect(JSON.stringify(rendered)).toContain('OpenRouter');
 });
 
 test('worker completion awaits accounting and preserves the engine answer', async ($, on) => {
   mock.env(on, {
-    MULTI_GATEWAY_TOKEN: 'secret',
-    MULTI_MOD_GATEWAY_URL: 'http://127.0.0.1:4000',
+    OPENROUTER_GATEWAY_TOKEN: 'secret',
+    OPENROUTER_MOD_GATEWAY_URL: 'http://127.0.0.1:4000',
   });
   on('session.id', () => ({ value: 'session' }));
   let recorded = false;
   on('http.fetch', (_$, event) => {
-    expect(event.url).toBe('http://127.0.0.1:4000/multi/mod/usage/complete');
+    expect(event.url).toBe('http://127.0.0.1:4000/openrouter/mod/usage/complete');
     expect(JSON.parse(event.init?.body ?? '{}')).toEqual({
       sessionId: 'session',
       agentId: 'worker',

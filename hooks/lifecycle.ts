@@ -18,7 +18,7 @@ export const register: Register = (on) => {
     return yield* next(event);
   });
   on('turn.complete', async ($, event, next) => {
-    await request($, '/multi/mod/usage/complete', {
+    await request($, '/openrouter/mod/usage/complete', {
       sessionId: await $.session.id(),
       agentId: event.agentId,
       turnId: event.turnId,
@@ -40,11 +40,11 @@ export const register: Register = (on) => {
 };
 
 async function postStep($: EngineInterface, event: object) {
-  await request($, '/multi/mod/telemetry', { ...event, sessionId: await $.session.id() });
+  await request($, '/openrouter/mod/telemetry', { ...event, sessionId: await $.session.id() });
 }
 
 async function detach($: EngineInterface) {
-  await request($, '/multi/mod/detach', { sessionId: await $.session.id() });
+  await request($, '/openrouter/mod/detach', { sessionId: await $.session.id() });
 }
 
 async function poll($: EngineInterface, agentId: string | undefined, active: () => boolean) {
@@ -53,7 +53,7 @@ async function poll($: EngineInterface, agentId: string | undefined, active: () 
   const query = `sessionId=${encodeURIComponent(sessionId)}&agentId=${encodeURIComponent(agentId ?? 'main')}`;
   let failures = 0;
   while (active() && failures < 5) {
-    const status = await request($, `/multi/mod/lifecycle?${query}`);
+    const status = await request($, `/openrouter/mod/lifecycle?${query}`);
     if (!active()) {
       return;
     }
@@ -73,8 +73,8 @@ async function request(
   route: string,
   payload?: object,
 ): Promise<Status | undefined> {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   if (!base || !token) {
     return undefined;
   }
@@ -83,7 +83,7 @@ async function request(
     const response = await Promise.race([
       $.http.fetch(`${base}${route}`, {
         method: payload ? 'POST' : 'GET',
-        headers: { 'content-type': 'application/json', 'x-multi-gateway-token': token },
+        headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
         ...(payload ? { body: JSON.stringify(payload) } : {}),
       }),
       new Promise<never>((_, reject) => {
@@ -105,5 +105,5 @@ function statusText(status: Status, agentId: string | undefined) {
   return `${status.model} · ${agentId ?? 'main'} · ${status.state} · ${elapsed}s ${status.detail ?? ''}`;
 }
 async function cancelCompaction($: EngineInterface, agentId?: string) {
-  await request($, '/multi/mod/compact/cancel', { sessionId: await $.session.id(), agentId });
+  await request($, '/openrouter/mod/compact/cancel', { sessionId: await $.session.id(), agentId });
 }

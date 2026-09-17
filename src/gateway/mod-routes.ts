@@ -45,9 +45,11 @@ export async function handleModRoute(
 ) {
   try {
     if (
-      ['/multi/mod/usage', '/multi/mod/receipts', '/multi/mod/usage/complete'].includes(
-        url.pathname,
-      )
+      [
+        '/openrouter/mod/usage',
+        '/openrouter/mod/receipts',
+        '/openrouter/mod/usage/complete',
+      ].includes(url.pathname)
     ) {
       if (!receipts) {
         throw new Error('Usage accounting is unavailable');
@@ -55,7 +57,7 @@ export async function handleModRoute(
       return reply(res, await usageRoute(req, url, parsed, receipts, billedUsage, dashboard));
     }
     switch (url.pathname) {
-      case '/multi/mod/telemetry':
+      case '/openrouter/mod/telemetry':
         if (req.method === 'POST') {
           return handlePostRoute(
             req,
@@ -77,7 +79,7 @@ export async function handleModRoute(
             ),
           ) ?? {},
         );
-      case '/multi/mod/lifecycle':
+      case '/openrouter/mod/lifecycle':
         method(req, 'GET');
         return reply(
           res,
@@ -88,7 +90,7 @@ export async function handleModRoute(
             ),
           ) ?? {},
         );
-      case '/multi/mod/mode':
+      case '/openrouter/mod/mode':
         method(req, 'GET');
         return modeRoute(
           res,
@@ -131,11 +133,11 @@ async function handlePostRoute(
   }
   const sessionId = text(parsed.sessionId, 'sessionId');
   const key = sessionKey(sessionId, parsed.agentId);
-  if (route.startsWith('/multi/mod/compact/')) {
+  if (route.startsWith('/openrouter/mod/compact/')) {
     return compactRoute(res, route, parsed, bridge, permissionModes, compactions);
   }
   switch (route) {
-    case '/multi/mod/policy':
+    case '/openrouter/mod/policy':
       if (parsed.generation === undefined) {
         if (parsed.sourceGeneration !== bridge.mode(key)?.generation) {
           throw new Error('Policy source generation is stale');
@@ -151,25 +153,25 @@ async function handlePostRoute(
           ? permissionModes.beginPolicy(sessionId, text(parsed.cwd, 'cwd'))
           : permissionModes.policies.status(sessionId, text(parsed.generation, 'generation')),
       );
-    case '/multi/mod/detach':
+    case '/openrouter/mod/detach':
       compactions?.cancel(sessionId);
       bridge.forgetSession(sessionId);
       permissionModes?.forgetSession(sessionId);
       return reply(res, { accepted: true });
-    case '/multi/mod/telemetry':
+    case '/openrouter/mod/telemetry':
       bridge.observeStep(key, {
         model: text(parsed.model, 'model'),
         effort: telemetryEffort(parsed.effort),
       });
       return reply(res, { accepted: true });
-    case '/multi/mod/session':
+    case '/openrouter/mod/session':
       return sessionRoute(res, parsed, key, bridge, permissionModes);
-    case '/multi/mod/offer':
+    case '/openrouter/mod/offer':
       return reply(res, {
         isOffered:
           permissionModes?.offered(text(parsed.cwd, 'cwd'), text(parsed.agent, 'agent')) ?? false,
       });
-    case '/multi/mod/worker':
+    case '/openrouter/mod/worker':
       return await workerRoute(res, parsed, key, bridge, permissionModes);
     default:
       throw new Error('Unknown mod route');
@@ -210,7 +212,7 @@ function sessionRoute(
     generation,
   });
   if (snapshot && value.event === 'start') {
-    process.emit('multi-mod-session-start');
+    process.emit('openrouter-mod-session-start');
   }
   return snapshot
     ? reply(res, { accepted: true, ...snapshot })
@@ -308,7 +310,7 @@ function compactRoute(
   compactions?: ModCompactions,
 ) {
   const session = text(value.sessionId, 'sessionId');
-  if (route === '/multi/mod/compact/cancel') {
+  if (route === '/openrouter/mod/compact/cancel') {
     compactions?.cancelScope(
       session,
       value.agentId === undefined ? undefined : text(value.agentId, 'agentId'),
@@ -322,7 +324,7 @@ function compactRoute(
   }
   const agent = value.agentId === undefined ? undefined : text(value.agentId, 'agentId');
   const identity = { session, agent, generation: current.generation };
-  if (route === '/multi/mod/compact/run') {
+  if (route === '/openrouter/mod/compact/run') {
     const context = modes.resolve(session, agent);
     return reply(res, compactions.run(identity, text(value.precomputeId, 'precomputeId'), context));
   }
@@ -331,14 +333,14 @@ function compactRoute(
     messages: value.messages === undefined ? [] : transcript(value.messages),
     instructions: compactInstructions(value.instructions),
   };
-  if (route === '/multi/mod/compact/precompute') {
+  if (route === '/openrouter/mod/compact/precompute') {
     if (!input.messages.length) {
       throw new Error('Precompute requires a transcript');
     }
     modes.resolve(session, agent);
     return reply(res, compactions.prepare(input));
   }
-  if (route !== '/multi/mod/compact/authorize') {
+  if (route !== '/openrouter/mod/compact/authorize') {
     throw new Error('Unknown compaction route');
   }
   const result = compactions.authorize(input);

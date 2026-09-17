@@ -22,13 +22,17 @@ import { ReceiptLedger } from './gateway/receipts.ts';
 import type { GatewayEvent } from './gateway/server.ts';
 import { createNativeGateway } from './gateway/server.ts';
 import { providerSelection } from './install/plugins.ts';
-import { readZenKey } from './openrouter/auth.ts';
-import { ZEN_MODELS, ZEN_WORKERS, zenPickerOptions } from './openrouter/models.ts';
+import { readOpenRouterKey } from './openrouter/auth.ts';
+import {
+  OPENROUTER_MODELS,
+  OPENROUTER_WORKERS,
+  openrouterPickerOptions,
+} from './openrouter/models.ts';
 
-const enabledProviders = providerSelection(process.env.MULTI_ENABLED_PROVIDERS);
+const enabledProviders = providerSelection(process.env.OPENROUTER_ENABLED_PROVIDERS);
 const providerEnabled = (provider: string) =>
   enabledProviders?.some((name) => name === provider) ?? true;
-const claudeExecutable = process.env.MULTI_REAL_CLAUDE;
+const claudeExecutable = process.env.OPENROUTER_REAL_CLAUDE;
 
 /**
  * Claude Code requires a non-empty subagent prompt. Workers get no behavioral rules here;
@@ -70,7 +74,7 @@ async function main() {
   const pluginRoot = await findPluginRoot(fileURLToPath(import.meta.url));
   await assertFunctionHooksSupported();
   const anthropic = await anthropicSignedIn();
-  const zenKey = providerEnabled('zen') ? await readZenKey() : undefined;
+  const zenKey = providerEnabled('openrouter') ? await readOpenRouterKey() : undefined;
   const token = randomBytes(32).toString('hex');
   const settings = pickerSettings(Boolean(zenKey));
   await mergeSettings(args, settings);
@@ -78,11 +82,10 @@ async function main() {
   // and can outlive the child whose exit releases settingsDir and the gateway.
   // Keep ordinary background subagent tasks available within this owned session.
   settings.disableAgentView = true;
-  filterPicker(settings, process.env.MULTI_MODELS);
   const callerSettings = structuredClone(settings);
   const agents = workerDefinitions(Boolean(zenKey));
   const modBridge = new ModBridge();
-  const settingsDir = await mkdtemp(path.join(os.tmpdir(), 'multi-native-settings-'));
+  const settingsDir = await mkdtemp(path.join(os.tmpdir(), 'openrouter-settings-'));
   const callerSettingsFile = path.join(settingsDir, 'caller-settings.json');
   await writeFile(callerSettingsFile, JSON.stringify(callerSettings), { mode: 0o600 });
   const permissionModes = new PermissionModes(
@@ -97,8 +100,8 @@ async function main() {
   );
   await permissionModes.precompute(process.cwd());
   const receipts = new ReceiptLedger({
-    file: process.env.MULTI_RECEIPTS_FILE
-      ? path.resolve(process.env.MULTI_RECEIPTS_FILE)
+    file: process.env.OPENROUTER_RECEIPTS_FILE
+      ? path.resolve(process.env.OPENROUTER_RECEIPTS_FILE)
       : undefined,
     onError: (error) => {
       process.stderr.write(`[native] receipt not written: ${String(error)}\n`);
@@ -109,7 +112,7 @@ async function main() {
     token,
     enabledProviders,
     modBridge,
-    zen: zenKey ? { apiKey: zenKey } : undefined,
+    openrouter: zenKey ? { apiKey: zenKey } : undefined,
     permissionModes,
     blockAnthropic: !anthropic,
     guardAuto: true,
@@ -132,7 +135,7 @@ async function main() {
   if (!initialModel && selectedModel) {
     args.push('--model', selectedModel);
   }
-  configureApproval(settings, selectedModel, anthropic);
+  configureApproval(settings, anthropic);
   await writeFile(settingsFile, JSON.stringify(settings), { mode: 0o600 });
   const definitions = JSON.stringify(agents);
   const childEnvironment = gatewayEnvironment(address.port, token, anthropic);
@@ -236,7 +239,7 @@ function validateSessionLaunch(args: string[]) {
     ['attach', 'respawn'].includes(args[0] ?? '')
   ) {
     throw new Error(
-      'Multi sessions must stay attached to their launcher. Exit and use --resume <session-id> to continue with a fresh gateway; whole-session background handoff is unsupported.',
+      'OpenRouter sessions must stay attached to their launcher. Exit and use --resume <session-id> to continue with a fresh gateway; whole-session background handoff is unsupported.',
     );
   }
   if (process.env.ANTHROPIC_BASE_URL) {
@@ -344,15 +347,15 @@ function atLeastVersion(actual: number[], required: number[]): boolean {
  * the mod can acknowledge. A cold start on Windows takes well over five seconds
  * (large binary, antivirus scan), so the wait is generous and overridable.
  */
-const modSessionStartTimeoutMs = Number(process.env.MULTI_MOD_START_TIMEOUT_MS ?? 30000);
+const modSessionStartTimeoutMs = Number(process.env.OPENROUTER_MOD_START_TIMEOUT_MS ?? 30000);
 
 function awaitModSessionStart(): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      process.off('multi-mod-session-start', ready);
+      process.off('openrouter-mod-session-start', ready);
       reject(
         new Error(
-          'Claude Code 2.1.272 or newer with loaded function hooks is required; the Multi mod did not acknowledge session.start.',
+          'Claude Code 2.1.272 or newer with loaded function hooks is required; the openrouter mod did not acknowledge session.start.',
         ),
       );
     }, modSessionStartTimeoutMs);
@@ -360,7 +363,7 @@ function awaitModSessionStart(): Promise<void> {
       clearTimeout(timer);
       resolve();
     };
-    process.once('multi-mod-session-start', ready);
+    process.once('openrouter-mod-session-start', ready);
   });
 }
 
@@ -383,11 +386,11 @@ async function anthropicSignedIn(): Promise<boolean> {
   return parseAuthProbeOutput(stdout);
 }
 
-export function workerDefinitions(zen: boolean) {
+export function workerDefinitions(openrouter: boolean) {
   const agents: Record<string, AgentDefinition> = {};
-  for (const [name, option] of Object.entries(zen ? ZEN_WORKERS : {})) {
+  for (const [name, option] of Object.entries(openrouter ? OPENROUTER_WORKERS : {})) {
     agents[name] = {
-      description: `OpenCode Zen ${option.model}${option.effort ? `, ${option.effort} effort` : ''}. Uses native Claude Code tools.`,
+      description: `OpenRouter ${option.model}${option.effort ? `, ${option.effort} effort` : ''}. Uses native Claude Code tools.`,
       prompt: WORKER_PROMPT,
       model: option.model,
       tools: ['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write'],
@@ -479,32 +482,9 @@ async function initialSelection(args: string[], settings: LaunchSettings, anthro
   return { initialModel, selectedModel: initialModel ?? fallback };
 }
 
-function filterPicker(settings: LaunchSettings, selection: string | undefined) {
-  if (selection === undefined) {
-    return;
-  }
-  const models = [
-    ...new Set(
-      selection
-        .split(',')
-        .map((model) => model.trim())
-        .filter(Boolean),
-    ),
-  ];
-  const available = new Map(settings.modelPicker.options.map((option) => [option.model, option]));
-  settings.modelPicker.options = models.map((model) => {
-    const option = available.get(model);
-    if (!option) {
-      throw new Error(`MULTI_MODELS: model is not available in this launcher's picker: ${model}`);
-    }
-    return option;
-  });
-}
-
-function configureApproval(settings: LaunchSettings, selectedModel?: string, anthropic = false) {
-  const nativeClaude =
-    anthropic && (!selectedModel?.startsWith('multi/') || selectedModel.startsWith('multi/zen/'));
-  if (!nativeClaude) {
+function configureApproval(settings: LaunchSettings, anthropic = false) {
+  // Claude executes every tool here, so auto mode needs Claude's own review.
+  if (!anthropic) {
     settings.permissions = { ...settings.permissions, disableAutoMode: 'disable' };
   }
   // --settings is fixed for the session. A per-tool capability guard also covers
@@ -521,13 +501,13 @@ function configureApproval(settings: LaunchSettings, selectedModel?: string, ant
 }
 
 async function handleCommand(command?: string) {
-  if (command === '--zen-models') {
-    console.log(JSON.stringify(ZEN_MODELS, null, 2));
+  if (command === '--openrouter-models') {
+    console.log(JSON.stringify(OPENROUTER_MODELS, null, 2));
     process.exit(0);
   }
   if (command === '--help') {
     console.log(
-      'Usage: node src/launcher.ts [--zen-models] [-- <claude arguments>]\nLaunch Claude with external models and native coding workers.\n--zen-models: list supported Zen models and capabilities\nOPENCODE_API_KEY: Zen key\nMULTI_ZEN_MODELS: comma-separated Zen model IDs to show\nMULTI_MODELS: comma-separated full model IDs to show in /model (unset: defaults; empty: hide external rows)',
+      'Usage: node src/launcher.ts [--openrouter-models] [-- <claude arguments>]\nLaunch Claude with OpenRouter models and named workers.\n--openrouter-models: list the admitted OpenRouter models and capabilities\nOPENROUTER_API_KEY: the API key (or run claude-openrouter connect)\nOPENROUTER_MODELS: comma-separated OpenRouter model IDs to show in /model (unset: defaults; empty: hide OpenRouter rows)',
     );
     process.exit(0);
   }
@@ -583,16 +563,16 @@ function pickerProfile(adjustableEffort: boolean): string {
   return adjustableEffort ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
 }
 
-function pickerSettings(zen: boolean) {
+function pickerSettings(openrouter: boolean) {
   const settings: LaunchSettings = {
     modelPicker: {
       options: [
-        ...(zen ? zenPickerOptions(process.env.MULTI_ZEN_MODELS) : []).map(
+        ...(openrouter ? openrouterPickerOptions(process.env.OPENROUTER_MODELS) : []).map(
           ({ model, label, efforts }) => ({
             model,
-            label: `Zen · ${label}`,
+            label: `OpenRouter · ${label}`,
             behavesAs: pickerProfile(Boolean(efforts?.length)),
-            description: `Zen API billing · Claude tools${efforts ? '' : ' · native reasoning; /effort not applicable'}`,
+            description: `OpenRouter API billing · Claude tools${efforts ? '' : ' · native reasoning; /effort not applicable'}`,
           }),
         ),
       ],
@@ -613,7 +593,7 @@ function translateTrafficPolicy(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   }
   const { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: _flag, ...rest } = env;
   process.stderr.write(
-    'Multi: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC would block the local gateway; using DISABLE_AUTOUPDATER, DISABLE_TELEMETRY, DISABLE_ERROR_REPORTING and DISABLE_BUG_COMMAND instead.\n',
+    'claude-openrouter: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC would block the local gateway; using DISABLE_AUTOUPDATER, DISABLE_TELEMETRY, DISABLE_ERROR_REPORTING and DISABLE_BUG_COMMAND instead.\n',
   );
   return {
     ...rest,
@@ -626,7 +606,7 @@ function translateTrafficPolicy(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 function gatewayEnvironment(port: number, token: string, anthropic: boolean) {
   const env = translateTrafficPolicy({ ...process.env });
-  delete env.OPENCODE_API_KEY;
+  delete env.OPENROUTER_API_KEY;
   return {
     ...env,
     CLAUDE_CODE_DISABLE_AGENT_VIEW: '1',
@@ -634,13 +614,13 @@ function gatewayEnvironment(port: number, token: string, anthropic: boolean) {
     // API timer; preserve explicit user limits.
     API_TIMEOUT_MS: process.env.API_TIMEOUT_MS ?? '2147483647',
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
-    MULTI_GATEWAY_TOKEN: token,
+    OPENROUTER_GATEWAY_TOKEN: token,
     CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '1',
-    MULTI_MOD_GATEWAY_URL: `http://127.0.0.1:${port}`,
+    OPENROUTER_MOD_GATEWAY_URL: `http://127.0.0.1:${port}`,
     ...(!anthropic ? { ANTHROPIC_AUTH_TOKEN: token } : {}),
     ANTHROPIC_CUSTOM_HEADERS: [
       process.env.ANTHROPIC_CUSTOM_HEADERS,
-      `x-multi-gateway-token: ${token}`,
+      `x-openrouter-gateway-token: ${token}`,
     ]
       .filter(Boolean)
       .join('\n'),
@@ -648,7 +628,7 @@ function gatewayEnvironment(port: number, token: string, anthropic: boolean) {
 }
 
 function traceEvent(event: GatewayEvent) {
-  if (process.env.MULTI_NATIVE_TRACE === '1') {
+  if (process.env.OPENROUTER_NATIVE_TRACE === '1') {
     process.stderr.write(`[native] ${JSON.stringify(event)}\n`);
   }
 }
@@ -665,7 +645,7 @@ async function findPluginRoot(file: string): Promise<string> {
     } catch {
       const parent = path.dirname(directory);
       if (parent === directory) {
-        throw new Error(`Could not find the Multi plugin root above ${file}`);
+        throw new Error(`Could not find the openrouter plugin root above ${file}`);
       }
     }
   }

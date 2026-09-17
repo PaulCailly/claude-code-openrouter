@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatZenQuota, readZenQuota } from '../../src/openrouter/usage.ts';
+import { formatOpenRouterQuota, readOpenRouterQuota } from '../../src/openrouter/usage.ts';
 
 const payload = {
   usage: {
@@ -10,9 +10,9 @@ const payload = {
   },
 };
 
-test('Zen Go quota sends the API key and parses provider windows', async () => {
+test('OpenRouter Go quota sends the API key and parses provider windows', async () => {
   let request: Request | undefined;
-  const result = await readZenQuota({
+  const result = await readOpenRouterQuota({
     apiKey: 'test-key',
     endpoint: 'https://example.test/usage',
     fetch: async (input, init) => {
@@ -24,42 +24,42 @@ test('Zen Go quota sends the API key and parses provider windows', async () => {
   assert.equal(result.quota.monthly.percent, 100);
   assert.equal(request?.headers.get('authorization'), 'Bearer test-key');
   assert.equal(request?.redirect, 'error');
-  const view = formatZenQuota(result);
+  const view = formatOpenRouterQuota(result);
   assert.equal(view.status, 'ready');
   assert.match(view.summary, /weekly: 34% used/);
   assert(view.details.some((line) => line.includes('limit reached')));
 });
 
-test('Zen Go quota distinguishes missing key and missing entitlement', async () => {
-  assert.deepEqual(await readZenQuota({ apiKey: '' }), {
+test('OpenRouter Go quota distinguishes missing key and missing entitlement', async () => {
+  assert.deepEqual(await readOpenRouterQuota({ apiKey: '' }), {
     status: 'unavailable',
     reason: 'missing-key',
   });
-  const result = await readZenQuota({
+  const result = await readOpenRouterQuota({
     apiKey: 'test-key',
     fetch: async () => Response.json({ error: { type: 'EntitlementError' } }, { status: 403 }),
   });
   assert.deepEqual(result, { status: 'unavailable', reason: 'not-go-entitled' });
-  assert.equal(formatZenQuota(result).status, 'unavailable');
-  const forbidden = await readZenQuota({
+  assert.equal(formatOpenRouterQuota(result).status, 'unavailable');
+  const forbidden = await readOpenRouterQuota({
     apiKey: 'test-key',
     fetch: async () => Response.json({ error: { type: 'AuthError' } }, { status: 403 }),
   });
   assert.deepEqual(forbidden, { status: 'unavailable', reason: 'unauthorized' });
-  assert.equal(formatZenQuota(forbidden).status, 'error');
+  assert.equal(formatOpenRouterQuota(forbidden).status, 'error');
 });
 
-test('Zen quota rejects invalid credentials before fetch and malformed reset times', async () => {
+test('OpenRouter quota rejects invalid credentials before fetch and malformed reset times', async () => {
   await assert.rejects(
-    readZenQuota({
+    readOpenRouterQuota({
       apiKey: 'bad\nkey',
       fetch: async () => {
         throw new Error('must not fetch');
       },
     }),
-    /Invalid OpenCode Zen API key/,
+    /Invalid OpenRouter API key/,
   );
-  const result = await readZenQuota({
+  const result = await readOpenRouterQuota({
     apiKey: 'test-key',
     fetch: async () =>
       Response.json({
@@ -72,18 +72,18 @@ test('Zen quota rejects invalid credentials before fetch and malformed reset tim
   assert.deepEqual(result, { status: 'unavailable', reason: 'malformed' });
 });
 
-test('Zen Go quota rejects malformed, unauthorized and timed out responses', async () => {
-  const malformed = await readZenQuota({
+test('OpenRouter Go quota rejects malformed, unauthorized and timed out responses', async () => {
+  const malformed = await readOpenRouterQuota({
     apiKey: 'key',
     fetch: async () => Response.json({ usage: {} }),
   });
   assert.deepEqual(malformed, { status: 'unavailable', reason: 'malformed' });
-  const unauthorized = await readZenQuota({
+  const unauthorized = await readOpenRouterQuota({
     apiKey: 'key',
     fetch: async () => new Response('{}', { status: 401 }),
   });
   assert.deepEqual(unauthorized, { status: 'unavailable', reason: 'unauthorized' });
-  const timeout = await readZenQuota({
+  const timeout = await readOpenRouterQuota({
     apiKey: 'key',
     timeoutMs: 1,
     fetch: async (_input, init) =>

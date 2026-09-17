@@ -14,7 +14,7 @@ const workers = {
     description: 'Astra high',
     tools: ['Read', 'Bash'],
   },
-  'zen-other': { model: 'multi/zen/other', description: 'Other', tools: ['Read'] },
+  'openrouter-other': { model: 'openrouter/other', description: 'Other', tools: ['Read'] },
 };
 const rows = Object.entries(workers).map(
   ([name, worker]) => `- ${name}: ${worker.description} (Tools: ${worker.tools.join(', ')})`,
@@ -80,7 +80,7 @@ test('catalog handles bare native system announcements without changing ordinary
 });
 
 test('catalog compacts text blocks only and follows a changed picker selection', () => {
-  const catalog = new AgentCatalog(workers, ['multi/zen/other']);
+  const catalog = new AgentCatalog(workers, ['openrouter/other']);
   const body: MessagesRequest = {
     messages: [
       {

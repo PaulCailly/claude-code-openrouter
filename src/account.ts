@@ -1,15 +1,15 @@
 import { fileURLToPath } from 'node:url';
 import { providerSelection } from './install/plugins.ts';
 import { run } from './install/process.ts';
-import { readZenKey, saveZenKey } from './openrouter/auth.ts';
+import { readOpenRouterKey, saveOpenRouterKey } from './openrouter/auth.ts';
 
 async function secretInput(): Promise<string> {
   if (!process.stdin.isTTY) {
     throw new Error(
-      'Run multi connect zen in your own terminal for hidden key entry. Do not paste the key into Claude.',
+      'Run claude-openrouter connect in your own terminal for hidden key entry. Do not paste the key into Claude.',
     );
   }
-  process.stderr.write('Zen API key (hidden): ');
+  process.stderr.write('OpenRouter API key (hidden): ');
   process.stdin.setRawMode(true);
   process.stdin.resume();
   let value = '';
@@ -50,27 +50,29 @@ async function secretInput(): Promise<string> {
   });
 }
 
-async function connectZen() {
-  if (await readZenKey()) {
-    console.log('Zen credentials found. Relaunch Claude to load Zen models.');
+async function connectOpenRouter() {
+  if (await readOpenRouterKey()) {
+    console.log('OpenRouter credentials found. Relaunch Claude to load OpenRouter models.');
     return 0;
   }
-  console.log('Create a Zen API key at https://opencode.ai/auth');
-  await saveZenKey(await secretInput());
-  console.log('Zen key saved to OpenCode auth. Relaunch Claude to load Zen models.');
+  console.log('Create an OpenRouter API key at https://openrouter.ai/keys');
+  await saveOpenRouterKey(await secretInput());
+  console.log(
+    'OpenRouter key saved to OpenRouter auth. Relaunch Claude to load OpenRouter models.',
+  );
   return 0;
 }
 
 async function main() {
   const [command, provider, ...args] = process.argv.slice(2);
-  const enabled = providerSelection(process.env.MULTI_ENABLED_PROVIDERS) ?? [];
+  const enabled = providerSelection(process.env.OPENROUTER_ENABLED_PROVIDERS) ?? [];
   if (!enabled.some((name) => name === provider)) {
-    throw new Error('Install and enable the requested Multi provider plugin first.');
+    throw new Error('Install and enable the openrouter plugin first.');
   }
-  if (command === 'connect' && provider === 'zen' && args.length === 0) {
-    return connectZen();
+  if (command === 'connect' && provider === 'openrouter' && args.length === 0) {
+    return connectOpenRouter();
   }
-  throw new Error('Usage: multi status | connect zen | uninstall');
+  throw new Error('Usage: claude-openrouter status | connect | uninstall');
 }
 
 // Browser links are emitted by the provider-owned login process. Never read tokens.

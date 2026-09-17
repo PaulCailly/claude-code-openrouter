@@ -1,10 +1,10 @@
 import type { ContentBlock, MessagesRequest } from '../gateway/messages.ts';
 import { estimateInputTokens } from '../gateway/tokens.ts';
 import { toChat } from './chat.ts';
-import type { ZenModel } from './models.ts';
-import { zenModel } from './models.ts';
+import type { OpenRouterModel } from './models.ts';
+import { openrouterModel } from './models.ts';
 
-function validateMedia(body: MessagesRequest, model: ZenModel) {
+function validateMedia(body: MessagesRequest, model: OpenRouterModel) {
   const check = (block: ContentBlock) => {
     if (block.type === 'image' && !model.images) {
       throw new Error(`${model.id} does not support images in this integration`);
@@ -29,10 +29,12 @@ function validateMedia(body: MessagesRequest, model: ZenModel) {
 }
 
 /** Pure translation keeps repeated prefixes byte-stable; the caller owns credentials. */
-export function zenRequest(body: MessagesRequest, cacheKey: string) {
-  const model = zenModel(body.model?.replace(/^multi\/zen\//, '') ?? '');
-  if (!model || body.model !== `multi/zen/${model.id}`) {
-    throw new Error('Unknown Zen model. Run the launcher with --zen-models for supported choices.');
+export function openrouterRequest(body: MessagesRequest, cacheKey: string) {
+  const model = openrouterModel(body.model?.replace(/^openrouter\//, '') ?? '');
+  if (!model || body.model !== `openrouter/${model.id}`) {
+    throw new Error(
+      'Unknown OpenRouter model. Run the launcher with --openrouter-models for supported choices.',
+    );
   }
   if (
     body.max_tokens !== undefined &&
@@ -40,7 +42,7 @@ export function zenRequest(body: MessagesRequest, cacheKey: string) {
       body.max_tokens < 1 ||
       body.max_tokens > model.maxOutputTokens)
   ) {
-    throw new Error(`Zen max_tokens must be between 1 and ${model.maxOutputTokens}`);
+    throw new Error(`OpenRouter max_tokens must be between 1 and ${model.maxOutputTokens}`);
   }
   validateMedia(body, model);
   const effort = body.output_config?.effort;
@@ -54,7 +56,7 @@ export function zenRequest(body: MessagesRequest, cacheKey: string) {
     model.id,
   );
   return {
-    signaturePrefix: `multi-zen-chat:${model.id}:`,
+    signaturePrefix: `openrouter-chat:${model.id}:`,
     inputTokens: estimateInputTokens(chat),
     endpoint: 'chat/completions' as const,
     body: chat,

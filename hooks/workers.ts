@@ -38,7 +38,7 @@ export const register: Register = (on) => {
         cwd: await $.session.cwd(),
         agent: event.agent,
       },
-      '/multi/mod/offer',
+      '/openrouter/mod/offer',
     );
     return response?.isOffered ? next(event) : { isOffered: false };
   });
@@ -62,7 +62,11 @@ export const register: Register = (on) => {
       return next(event);
     }
     const sessionId = await $.session.id();
-    const mode = await request($, {}, `/multi/mod/mode?sessionId=${encodeURIComponent(sessionId)}`);
+    const mode = await request(
+      $,
+      {},
+      `/openrouter/mod/mode?sessionId=${encodeURIComponent(sessionId)}`,
+    );
     const snapshot = await request($, {
       generation: mode?.generation,
       sessionId,
@@ -83,18 +87,18 @@ export const register: Register = (on) => {
 };
 
 async function active($: EngineInterface): Promise<boolean> {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   return Boolean(base && token);
 }
 
 async function request(
   $: EngineInterface,
   payload: Record<string, unknown>,
-  route = '/multi/mod/worker',
+  route = '/openrouter/mod/worker',
 ) {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   if (!base || !token) {
     return undefined;
   }
@@ -106,7 +110,7 @@ async function request(
   try {
     const response = $.http.fetch(`${base}${route}`, {
       method: route.includes('?') ? 'GET' : 'POST',
-      headers: { 'content-type': 'application/json', 'x-multi-gateway-token': token },
+      headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
       ...(route.includes('?') ? {} : { body }),
     });
     const timeout = new Promise<never>((_, reject) => {

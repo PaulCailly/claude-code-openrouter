@@ -2,9 +2,9 @@ import type { MessagesRequest } from './messages.ts';
 
 /** Signature prefixes this gateway stamps on foreign reasoning blocks. */
 const FOREIGN_SIGNATURE_PREFIXES: readonly string[] = [
-  'multi-openai:',
-  'multi-zen-responses:',
-  'multi-zen-chat:',
+  'openrouter-legacy:',
+  'openrouter-responses:',
+  'openrouter-chat:',
 ];
 
 /** Strip foreign reasoning before a request reaches Anthropic, which rejects it. */

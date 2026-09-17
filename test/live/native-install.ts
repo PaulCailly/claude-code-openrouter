@@ -84,7 +84,7 @@ await native(['plugin', 'marketplace', 'add', source]);
 const installation = await native([
   'plugin',
   'install',
-  'multi-zen@cc-multi-cli-plugin',
+  'multi-openrouter@cc-multi-cli-plugin',
   '--scope',
   'user',
 ]);
@@ -92,11 +92,11 @@ console.log(installation.stdout.trim());
 const listing = await native(['plugin', 'list', '--json']);
 await writeFile(path.join(directory, 'installed.json'), listing.stdout);
 const plugins: { id: string; enabled: boolean; installPath: string }[] = JSON.parse(listing.stdout);
-const core = plugins.find((plugin) => plugin.id === 'multi-core@cc-multi-cli-plugin');
+const core = plugins.find((plugin) => plugin.id === 'openrouter@cc-multi-cli-plugin');
 assert(core?.enabled, 'Provider installation must install and enable core');
 const launcher = path.join(core.installPath, 'src/launcher.ts');
 await rename(source, `${source}-removed`);
-const catalog = await execute(process.execPath, [launcher, '--zen-models'], {
+const catalog = await execute(process.execPath, [launcher, '--openrouter-models'], {
   cwd: directory,
   env,
   timeout: 30000,
@@ -115,7 +115,7 @@ const fake =
 const fakeScript = `const fs=require('node:fs');const args=process.argv.slice(2);
 if(args.includes('plugin')&&args.includes('list')){console.log('[]');process.exit(0)}
 if(args[0]==='--version'){console.log(process.env.TEST_CLAUDE_VERSION??'2.1.272');process.exit(0)}
-const result=(value)=>{const base=process.env.MULTI_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/multi/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-multi-gateway-token':process.env.MULTI_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
+const result=(value)=>{const base=process.env.OPENROUTER_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/openrouter/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-openrouter-gateway-token':process.env.OPENROUTER_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
 if(args[0]==='auth'){process.stdout.write(JSON.stringify({loggedIn:false}));process.exitCode=1}else{
 const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'utf8'));
 result(JSON.stringify(settings.modelPicker.options.map(x=>x.model)));}
@@ -136,13 +136,13 @@ const launched = await execute(process.execPath, [launcher], {
   timeout: 30000,
   env: isolatedEnvironment({
     ...env,
-    MULTI_REAL_CLAUDE: fake,
-    MULTI_ENABLED_PROVIDERS: 'zen',
-    OPENCODE_API_KEY: 'fixture-key',
+    OPENROUTER_REAL_CLAUDE: fake,
+    OPENROUTER_ENABLED_PROVIDERS: 'openrouter',
+    OPENROUTER_API_KEY: 'fixture-key',
   }),
 });
 const models: string[] = JSON.parse(launched.stdout);
-assert(models.length > 0 && models.every((model) => model.startsWith('multi/zen/')));
+assert(models.length > 0 && models.every((model) => model.startsWith('openrouter/')));
 
 await execute(process.execPath, [path.join(core.installPath, 'src/setup.ts'), '--shell', shell], {
   env,
@@ -169,11 +169,11 @@ const status = await execute(statusInvocation.command, statusInvocation.args, {
   cwd: directory,
   windowsVerbatimArguments: statusInvocation.windowsVerbatimArguments,
 });
-assert.deepEqual(JSON.parse(status.stdout).providers, ['zen']);
+assert.deepEqual(JSON.parse(status.stdout).providers, ['openrouter']);
 const disabledArgs = [
   'status',
   '--settings',
-  JSON.stringify({ enabledPlugins: { 'multi-zen@cc-multi-cli-plugin': false } }),
+  JSON.stringify({ enabledPlugins: { 'multi-openrouter@cc-multi-cli-plugin': false } }),
 ];
 const disabledInvocation =
   platform === 'win32'

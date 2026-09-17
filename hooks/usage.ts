@@ -20,7 +20,10 @@ export const register: Register = (on) => {
       return next(event);
     }
     const snapshot = dashboard(
-      await request($, `/multi/mod/usage?sessionId=${encodeURIComponent(session)}&view=providers`),
+      await request(
+        $,
+        `/openrouter/mod/usage?sessionId=${encodeURIComponent(session)}&view=providers`,
+      ),
     );
     const result = await next(event);
     // Preserve all permission decisions and tool arguments, including on lookup failure.
@@ -38,7 +41,10 @@ export const register: Register = (on) => {
     }
     const session = await $.session.id();
     const response = dashboard(
-      await request($, `/multi/mod/usage?sessionId=${encodeURIComponent(session)}&view=providers`),
+      await request(
+        $,
+        `/openrouter/mod/usage?sessionId=${encodeURIComponent(session)}&view=providers`,
+      ),
     );
     if (!response) {
       return { text: 'Multi usage is unavailable. Launch this session with claude-multi.' };
@@ -102,8 +108,8 @@ export const register: Register = (on) => {
     }
     const route =
       action === 'refresh'
-        ? `/multi/mod/usage?view=providers&refresh=true&sessionId=${encodeURIComponent(session)}`
-        : `/multi/mod/receipts?sessionId=${encodeURIComponent(session)}`;
+        ? `/openrouter/mod/usage?view=providers&refresh=true&sessionId=${encodeURIComponent(session)}`
+        : `/openrouter/mod/receipts?sessionId=${encodeURIComponent(session)}`;
     const response = await request($, route);
     const props = updatePane(previous, action, response);
     panes.set(session, props);
@@ -175,8 +181,8 @@ function receiptEntry(value: unknown): string[] {
 }
 
 async function request($: EngineInterface, route: string): Promise<unknown> {
-  const base = await $.env.get('MULTI_MOD_GATEWAY_URL');
-  const token = await $.env.get('MULTI_GATEWAY_TOKEN');
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
   if (!base || !token) {
     return undefined;
   }
@@ -185,7 +191,7 @@ async function request($: EngineInterface, route: string): Promise<unknown> {
     const result = await Promise.race([
       $.http.fetch(`${base}${route}`, {
         method: 'GET',
-        headers: { 'x-multi-gateway-token': token },
+        headers: { 'x-openrouter-gateway-token': token },
       }),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error('Usage timeout')), 8500);
