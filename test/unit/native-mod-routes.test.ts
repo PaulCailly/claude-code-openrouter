@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import { ModBridge } from '../../plugins/multi-core/src/gateway/mod-bridge.ts';
-import { PermissionModes } from '../../plugins/multi-core/src/gateway/mode-hook.ts';
-import { createNativeGateway } from '../../plugins/multi-core/src/gateway/server.ts';
+import { ModBridge } from '../../src/gateway/mod-bridge.ts';
+import { PermissionModes } from '../../src/gateway/mode-hook.ts';
+import { createNativeGateway } from '../../src/gateway/server.ts';
 
 async function start(t: test.TestContext, permissionModes?: PermissionModes, guardAuto?: boolean) {
   const server = createNativeGateway({

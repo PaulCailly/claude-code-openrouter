@@ -6,15 +6,12 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { GatewayFetch } from '../../plugins/multi-core/src/gateway/fetch.ts';
-import type { MessagesResponse } from '../../plugins/multi-core/src/gateway/messages.ts';
-import {
-  createNativeGateway,
-  type GatewayOptions,
-} from '../../plugins/multi-core/src/gateway/server.ts';
-import { readSse } from '../../plugins/multi-core/src/gateway/sse.ts';
-import { readZenKey } from '../../plugins/multi-zen/src/auth.ts';
-import { zenModel, zenPickerOptions } from '../../plugins/multi-zen/src/models.ts';
+import type { GatewayFetch } from '../../src/gateway/fetch.ts';
+import type { MessagesResponse } from '../../src/gateway/messages.ts';
+import { createNativeGateway, type GatewayOptions } from '../../src/gateway/server.ts';
+import { readSse } from '../../src/gateway/sse.ts';
+import { readZenKey } from '../../src/openrouter/auth.ts';
+import { zenModel, zenPickerOptions } from '../../src/openrouter/models.ts';
 import { isolatedEnvironment } from './environment.ts';
 
 interface UsageSample {

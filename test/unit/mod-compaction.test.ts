@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import {
-  ModCompactions,
-  type SummaryRequest,
-} from '../../plugins/multi-core/src/gateway/mod-compaction.ts';
+import { ModCompactions, type SummaryRequest } from '../../src/gateway/mod-compaction.ts';
 
 const input = {
   session: 's',

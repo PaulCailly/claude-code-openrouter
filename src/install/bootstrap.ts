@@ -38,7 +38,7 @@ async function dispatch(state: Installation, args: string[], management: boolean
     MULTI_ENABLED_PROVIDERS: providers.join(','),
   };
   const entry = management ? 'account.ts' : 'launcher.ts';
-  return run(state.node, [path.join(root, 'plugins', 'multi-core', 'src', entry), ...args], {
+  return run(state.node, [path.join(root, 'src', entry), ...args], {
     env,
   });
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ReceiptLedger } from '../../plugins/multi-core/src/gateway/receipts.ts';
-import type { GatewayEvent } from '../../plugins/multi-core/src/gateway/server.ts';
+import { ReceiptLedger } from '../../src/gateway/receipts.ts';
+import type { GatewayEvent } from '../../src/gateway/server.ts';
 
 const completion: GatewayEvent = {
   route: 'zen',

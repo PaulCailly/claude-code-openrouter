@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { run } from '../../plugins/multi-core/src/install/process.ts';
+import { run } from '../../src/install/process.ts';
 
 // Exit 0 when PATH reaches the child, 3 when the environment arrived empty.
 const probe = ['-e', 'process.exit(process.env.PATH ? 0 : 3)'];

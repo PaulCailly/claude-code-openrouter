@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
-import { readZenKey, saveZenKey } from '../../multi-zen/src/auth.ts';
 import { providerSelection } from './install/plugins.ts';
 import { run } from './install/process.ts';
+import { readZenKey, saveZenKey } from './openrouter/auth.ts';
 
 async function secretInput(): Promise<string> {
   if (!process.stdin.isTTY) {

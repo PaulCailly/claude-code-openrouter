@@ -7,8 +7,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { readZenKey } from '../../multi-zen/src/auth.ts';
-import { ZEN_MODELS, ZEN_WORKERS, zenPickerOptions } from '../../multi-zen/src/models.ts';
 import { AgentCatalog } from './gateway/agent-catalog.ts';
 import {
   loadWorkerPermissions,
@@ -23,8 +21,9 @@ import { hookCommand } from './gateway/permission-hook.ts';
 import { ReceiptLedger } from './gateway/receipts.ts';
 import type { GatewayEvent } from './gateway/server.ts';
 import { createNativeGateway } from './gateway/server.ts';
-
 import { providerSelection } from './install/plugins.ts';
+import { readZenKey } from './openrouter/auth.ts';
+import { ZEN_MODELS, ZEN_WORKERS, zenPickerOptions } from './openrouter/models.ts';
 
 const enabledProviders = providerSelection(process.env.MULTI_ENABLED_PROVIDERS);
 const providerEnabled = (provider: string) =>
@@ -528,7 +527,7 @@ async function handleCommand(command?: string) {
   }
   if (command === '--help') {
     console.log(
-      'Usage: node plugins/multi-core/src/launcher.ts [--zen-models] [-- <claude arguments>]\nLaunch Claude with external models and native coding workers.\n--zen-models: list supported Zen models and capabilities\nOPENCODE_API_KEY: Zen key\nMULTI_ZEN_MODELS: comma-separated Zen model IDs to show\nMULTI_MODELS: comma-separated full model IDs to show in /model (unset: defaults; empty: hide external rows)',
+      'Usage: node src/launcher.ts [--zen-models] [-- <claude arguments>]\nLaunch Claude with external models and native coding workers.\n--zen-models: list supported Zen models and capabilities\nOPENCODE_API_KEY: Zen key\nMULTI_ZEN_MODELS: comma-separated Zen model IDs to show\nMULTI_MODELS: comma-separated full model IDs to show in /model (unset: defaults; empty: hide external rows)',
     );
     process.exit(0);
   }

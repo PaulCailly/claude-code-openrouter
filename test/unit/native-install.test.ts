@@ -9,11 +9,8 @@ import { promisify } from 'node:util';
 import {
   setup as installSetup,
   uninstall as installUninstall,
-} from '../../plugins/multi-core/src/install/installation.ts';
-import {
-  providerSelection,
-  settingsArguments,
-} from '../../plugins/multi-core/src/install/plugins.ts';
+} from '../../src/install/installation.ts';
+import { providerSelection, settingsArguments } from '../../src/install/plugins.ts';
 
 const execute = promisify(execFile);
 
@@ -26,7 +23,7 @@ function windowsInvocation(pathname: string, args: string[], env: NodeJS.Process
     windowsVerbatimArguments: true,
   };
 }
-const setup = fileURLToPath(new URL('../../plugins/multi-core/src/setup.ts', import.meta.url));
+const setup = fileURLToPath(new URL('../../src/setup.ts', import.meta.url));
 const marketplace = 'cc-multi-cli-plugin';
 
 async function fixture(t: test.TestContext) {
@@ -121,7 +118,7 @@ async function core(directory: string, name: string) {
     path.join(root, '.claude-plugin/plugin.json'),
     JSON.stringify({ name: 'multi-core' }),
   );
-  const src = path.join(root, 'plugins/multi-core/src');
+  const src = path.join(root, 'src');
   await mkdir(src, { recursive: true });
   await writeFile(
     path.join(src, 'launcher.ts'),

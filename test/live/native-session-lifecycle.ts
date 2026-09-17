@@ -10,9 +10,7 @@ import { isolatedEnvironment } from './environment.ts';
 
 const run = promisify(execFile);
 const root = await mkdtemp(path.join(os.tmpdir(), 'multi-session-lifecycle-'));
-const launcher = fileURLToPath(
-  new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-);
+const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
 const realClaude = process.env.MULTI_REAL_CLAUDE || 'claude';
 await mkdir(path.join(root, 'config'));
 await writeFile(

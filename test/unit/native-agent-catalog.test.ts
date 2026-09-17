@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AgentCatalog } from '../../plugins/multi-core/src/gateway/agent-catalog.ts';
-import type { MessagesRequest } from '../../plugins/multi-core/src/gateway/messages.ts';
+import { AgentCatalog } from '../../src/gateway/agent-catalog.ts';
+import type { MessagesRequest } from '../../src/gateway/messages.ts';
 
 const workers = {
   'openai-native': {

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os, { hostname } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { lockStateFile } from '../../plugins/multi-core/src/gateway/state-lock.ts';
+import { lockStateFile } from '../../src/gateway/state-lock.ts';
 
 async function temporaryDirectory(t: test.TestContext, prefix: string): Promise<string> {
   const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
@@ -74,7 +74,7 @@ test('takes over a lock whose recorded owner is no longer alive', async (t) => {
 test('releases after the holder process is killed', { timeout: 10000 }, async (t) => {
   const directory = await temporaryDirectory(t, 'multi-crash-lock-');
   const file = path.join(directory, 'session.lock');
-  const module = new URL('../../plugins/multi-core/src/gateway/state-lock.ts', import.meta.url);
+  const module = new URL('../../src/gateway/state-lock.ts', import.meta.url);
   const child = spawn(
     process.execPath,
     [

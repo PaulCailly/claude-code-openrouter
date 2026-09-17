@@ -1,4 +1,4 @@
-import type { Effort } from '../../multi-core/src/gateway/effort.ts';
+import type { Effort } from '../gateway/effort.ts';
 
 type ZenProtocol = 'responses' | 'chat';
 

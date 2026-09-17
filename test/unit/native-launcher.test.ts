@@ -6,12 +6,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { AgentCatalog } from '../../plugins/multi-core/src/gateway/agent-catalog.ts';
-import {
-  checkLauncherArgumentLimit,
-  workerDefinitions,
-} from '../../plugins/multi-core/src/launcher.ts';
-import { ZEN_MODELS } from '../../plugins/multi-zen/src/models.ts';
+import { AgentCatalog } from '../../src/gateway/agent-catalog.ts';
+import { checkLauncherArgumentLimit, workerDefinitions } from '../../src/launcher.ts';
+import { ZEN_MODELS } from '../../src/openrouter/models.ts';
 
 async function writeClaudeFixture(bin: string, source: string): Promise<void> {
   if (process.platform === 'win32') {
@@ -56,9 +53,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
  result(JSON.stringify({agentView:process.env.CLAUDE_CODE_DISABLE_AGENT_VIEW,backgroundTasks:process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS,functionHooks:process.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS,settings,models:args.filter(x=>x.startsWith('multi/')),args,settingsCount:args.filter(x=>x==='--settings').length,hasLocalToken:!!process.env.MULTI_GATEWAY_TOKEN,apiTimeout:process.env.API_TIMEOUT_MS,auth:process.env.ANTHROPIC_API_KEY?'api':process.env.ANTHROPIC_AUTH_TOKEN?'local':'native'}));}
 `,
   );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   for (const auth of ['no', 'yes', 'api']) {
     const { stdout } = await promisify(execFile)(
       process.execPath,
@@ -92,7 +87,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
     );
     const result = JSON.parse(stdout);
     assert.equal(result.args.at(-2), '--plugin-dir');
-    assert.equal(result.args.at(-1), path.resolve(path.dirname(launcher), '../../..'));
+    assert.equal(result.args.at(-1), path.resolve(path.dirname(launcher), '..'));
     assert.equal(result.settingsCount, 1);
     assert.equal(result.settings.disableAgentView, true);
     assert.equal(result.agentView, '1');
@@ -130,7 +125,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
     (
       await promisify(execFile)(
         process.execPath,
-        [launcher, '--', '--plugin-dir', path.resolve(path.dirname(launcher), '../../..')],
+        [launcher, '--', '--plugin-dir', path.resolve(path.dirname(launcher), '..')],
         { cwd, timeout: 20000, env: baseEnvironment },
       )
     ).stdout,
@@ -213,9 +208,7 @@ const agents=JSON.parse(args[args.indexOf('--agents')+1]);
 result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=>x.startsWith('multi/')),zenKeyInChild:process.env.OPENCODE_API_KEY,args}));}
 `,
   );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   const { stdout } = await promisify(execFile)(
     process.execPath,
     [launcher, '--', '--model', 'multi/zen/gpt-5.6-luna', '--dangerously-skip-permissions'],
@@ -343,9 +336,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
 result(JSON.stringify({settings,models:args.filter(x=>x.startsWith('multi/')),zenKeyInChild:process.env.OPENCODE_API_KEY}));}
 `,
   );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   const { stdout } = await promisify(execFile)(process.execPath, [launcher], {
     cwd,
     timeout: 20000,
@@ -421,9 +412,7 @@ test('launcher argument limits are platform-aware and identify largest providers
 });
 
 test('the Zen model listing is available without authentication', async () => {
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   const { stdout } = await promisify(execFile)(process.execPath, [launcher, '--zen-models'], {
     timeout: 20000,
     env: {

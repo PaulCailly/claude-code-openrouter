@@ -3,8 +3,8 @@ import test from 'node:test';
 
 // Load the actual Mod modules without requiring Claude's host-only type package
 // in the offline TypeScript project. All runtime imports in these modules are erased types.
-const hooksUrl = new URL('../../plugins/multi-core/hooks/usage.ts', import.meta.url);
-const viewUrl = new URL('../../plugins/multi-core/hooks/usage-view.ts', import.meta.url);
+const hooksUrl = new URL('../../hooks/usage.ts', import.meta.url);
+const viewUrl = new URL('../../hooks/usage-view.ts', import.meta.url);
 const dashboard = {
   updatedAt: 'today',
   providers: [

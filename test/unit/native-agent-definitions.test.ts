@@ -4,10 +4,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test, { mock } from 'node:test';
-import {
-  loadWorkerPermissions,
-  pluginPermissions,
-} from '../../plugins/multi-core/src/gateway/agent-definitions.ts';
+import { loadWorkerPermissions, pluginPermissions } from '../../src/gateway/agent-definitions.ts';
 
 async function writeAgent(directory: string, name: string, source: string) {
   const agents = path.join(directory, '.claude', 'agents');

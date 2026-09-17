@@ -1,5 +1,5 @@
 import { getEncoding } from 'js-tiktoken';
-import type { ChatRequest } from '../../../multi-zen/src/chat.ts';
+import type { ChatRequest } from '../openrouter/chat.ts';
 
 let encoding: ReturnType<typeof getEncoding> | undefined;
 /** Shared local text estimate; providers may use different tokenizers. */

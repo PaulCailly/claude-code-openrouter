@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { atomicWriteFile } from '../../plugins/multi-core/src/gateway/atomic-write.ts';
+import { atomicWriteFile } from '../../src/gateway/atomic-write.ts';
 
 test('atomicWriteFile replaces files on Unix and retries Windows sharing errors', async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'atomic-write-'));

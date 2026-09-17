@@ -3,9 +3,9 @@ import test from 'node:test';
 import {
   ProviderUsageDashboard,
   type ProviderUsageView,
-} from '../../plugins/multi-core/src/gateway/provider-usage.ts';
-import { ReceiptLedger } from '../../plugins/multi-core/src/gateway/receipts.ts';
-import { createNativeGateway } from '../../plugins/multi-core/src/gateway/server.ts';
+} from '../../src/gateway/provider-usage.ts';
+import { ReceiptLedger } from '../../src/gateway/receipts.ts';
+import { createNativeGateway } from '../../src/gateway/server.ts';
 
 const empty = () => new ReceiptLedger().snapshot();
 test('provider dashboard reads every enabled provider and preserves unavailable quota status', async () => {

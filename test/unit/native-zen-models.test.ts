@@ -9,13 +9,13 @@ import {
   validateZenKey,
   ZenAuthError,
   zenAuthFile,
-} from '../../plugins/multi-zen/src/auth.ts';
+} from '../../src/openrouter/auth.ts';
 import {
   ZEN_MODELS,
   ZEN_WORKERS,
   zenModelOptions,
   zenPickerOptions,
-} from '../../plugins/multi-zen/src/models.ts';
+} from '../../src/openrouter/models.ts';
 
 function hostAuthOptions(dataHome: string) {
   const env: NodeJS.ProcessEnv = { OPENCODE_API_KEY: undefined };

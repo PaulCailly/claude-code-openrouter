@@ -5,9 +5,9 @@ import type {
   MessagesResponse,
   ResponseContentBlock,
   StopReason,
-} from '../../multi-core/src/gateway/messages.ts';
-import { prefixSafeLength, readSse } from '../../multi-core/src/gateway/sse.ts';
-import { callId, toolName } from '../../multi-core/src/gateway/tools.ts';
+} from '../gateway/messages.ts';
+import { prefixSafeLength, readSse } from '../gateway/sse.ts';
+import { callId, toolName } from '../gateway/tools.ts';
 
 const SIGNATURE_PREFIX = 'multi-zen-chat:';
 const IMAGE_MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);

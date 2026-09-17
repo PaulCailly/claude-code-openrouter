@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  executableInvocation,
-  resolveExecutable,
-} from '../../plugins/multi-core/src/gateway/executable.ts';
+import { executableInvocation, resolveExecutable } from '../../src/gateway/executable.ts';
 
 test('resolves Windows npm shims using PATHEXT order', () => {
   const seen: string[] = [];

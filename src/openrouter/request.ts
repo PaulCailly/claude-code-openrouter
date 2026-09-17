@@ -1,5 +1,5 @@
-import type { ContentBlock, MessagesRequest } from '../../multi-core/src/gateway/messages.ts';
-import { estimateInputTokens } from '../../multi-core/src/gateway/tokens.ts';
+import type { ContentBlock, MessagesRequest } from '../gateway/messages.ts';
+import { estimateInputTokens } from '../gateway/tokens.ts';
 import { toChat } from './chat.ts';
 import type { ZenModel } from './models.ts';
 import { zenModel } from './models.ts';

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import type { GatewayFetch } from '../../plugins/multi-core/src/gateway/fetch.ts';
-import type { GatewayOptions } from '../../plugins/multi-core/src/gateway/server.ts';
-import { createNativeGateway } from '../../plugins/multi-core/src/gateway/server.ts';
+import type { GatewayFetch } from '../../src/gateway/fetch.ts';
+import type { GatewayOptions } from '../../src/gateway/server.ts';
+import { createNativeGateway } from '../../src/gateway/server.ts';
 
 const model = 'multi/zen/glm-5.3';
 const request = {

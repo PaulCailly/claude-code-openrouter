@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { prefixSafeLength, readSse } from '../../plugins/multi-core/src/gateway/sse.ts';
+import { prefixSafeLength, readSse } from '../../src/gateway/sse.ts';
 
 async function* chunks(...parts: string[]) {
   for (const part of parts) {

@@ -94,7 +94,7 @@ await writeFile(path.join(directory, 'installed.json'), listing.stdout);
 const plugins: { id: string; enabled: boolean; installPath: string }[] = JSON.parse(listing.stdout);
 const core = plugins.find((plugin) => plugin.id === 'multi-core@cc-multi-cli-plugin');
 assert(core?.enabled, 'Provider installation must install and enable core');
-const launcher = path.join(core.installPath, 'plugins/multi-core/src/launcher.ts');
+const launcher = path.join(core.installPath, 'src/launcher.ts');
 await rename(source, `${source}-removed`);
 const catalog = await execute(process.execPath, [launcher, '--zen-models'], {
   cwd: directory,
@@ -144,11 +144,10 @@ const launched = await execute(process.execPath, [launcher], {
 const models: string[] = JSON.parse(launched.stdout);
 assert(models.length > 0 && models.every((model) => model.startsWith('multi/zen/')));
 
-await execute(
-  process.execPath,
-  [path.join(core.installPath, 'plugins/multi-core/src/setup.ts'), '--shell', shell],
-  { env, cwd: directory },
-);
+await execute(process.execPath, [path.join(core.installPath, 'src/setup.ts'), '--shell', shell], {
+  env,
+  cwd: directory,
+});
 const bin = path.join(home, '.local', 'share', 'multi-cli', 'bin');
 const multi = platform === 'win32' ? path.join(bin, 'multi.cmd') : path.join(bin, 'multi');
 if (platform === 'win32') {
