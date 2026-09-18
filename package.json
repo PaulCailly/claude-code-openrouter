@@ -40,11 +40,6 @@
   },
   "files": [
     "bin",
-    "src",
-    "hooks",
-    "skills",
-    ".claude-plugin",
-    "docs",
     "LICENSE",
     "NOTICE",
     "README.md"
