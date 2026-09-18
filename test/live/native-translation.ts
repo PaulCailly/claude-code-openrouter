@@ -1,8 +1,6 @@
-// Opt-in live check. Sends only synthetic text/images through the Codex subscription.
+// Opt-in live check. Sends only synthetic text and images through OpenRouter.
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import os from 'node:os';
-import path from 'node:path';
 import type { MessagesResponse } from '../../src/gateway/messages.ts';
 import { createNativeGateway } from '../../src/gateway/server.ts';
 

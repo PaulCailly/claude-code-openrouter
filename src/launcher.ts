@@ -23,7 +23,6 @@ import type { GatewayEvent } from './gateway/server.ts';
 import { createNativeGateway } from './gateway/server.ts';
 import { providerSelection } from './install/plugins.ts';
 import { readOpenRouterKey } from './openrouter/auth.ts';
-import type { CatalogModel } from './openrouter/catalog.ts';
 import { loadCatalog } from './openrouter/catalog.ts';
 import type { ModelOption as OpenRouterOption } from './openrouter/models.ts';
 import { workerDefinitions as openrouterWorkers, pickerOptions } from './openrouter/models.ts';
@@ -640,10 +639,6 @@ function traceEvent(event: GatewayEvent) {
   if (process.env.OPENROUTER_NATIVE_TRACE === '1') {
     process.stderr.write(`[native] ${JSON.stringify(event)}\n`);
   }
-}
-
-function isMissingExecutable(error: unknown): boolean {
-  return recordValue(error)?.code === 'ENOENT';
 }
 
 async function findPluginRoot(file: string): Promise<string> {

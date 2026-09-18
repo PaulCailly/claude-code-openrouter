@@ -22,7 +22,6 @@ import type { PendingApprovalTool } from './permission-hook.ts';
 import { approvalCapabilityGuard } from './permission-hook.ts';
 import { ProviderUsageDashboard } from './provider-usage.ts';
 import { ReceiptLedger } from './receipts.ts';
-import { estimateInputTokens } from './tokens.ts';
 import { forwardObservedTools, ToolObserver } from './tool-observer.ts';
 import { originalToolNames } from './tools.ts';
 
@@ -285,11 +284,7 @@ export function createNativeGateway({
     res.writeHead(200, { 'content-type': 'application/json' });
     return res.end(JSON.stringify(decision));
   }
-  async function dispatch(
-    exchange: ProviderRequest,
-    metadata: ReturnType<typeof requestIdentity>,
-    external: string | null,
-  ) {
+  async function dispatch(exchange: ProviderRequest, external: string | null) {
     if (!external && blockAnthropic) {
       throw new BadRequest('Anthropic is not signed in. Select an external model.');
     }
@@ -433,7 +428,7 @@ export function createNativeGateway({
       if (url.pathname === '/openrouter/permission') {
         return sendPermissionDecision(exchange);
       }
-      await dispatch(exchange, metadata, external);
+      await dispatch(exchange, external);
     } catch (error) {
       abort.abort();
       failResponse(res, emit, error);

@@ -6,7 +6,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { AgentCatalog } from '../../src/gateway/agent-catalog.ts';
 import { checkLauncherArgumentLimit, workerDefinitions } from '../../src/launcher.ts';
 import { parseCatalog } from '../../src/openrouter/catalog.ts';
 import { pickerOptions } from '../../src/openrouter/models.ts';

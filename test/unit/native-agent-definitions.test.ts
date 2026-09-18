@@ -162,6 +162,4 @@ test('worker hooks do not restrict the native worker', async () => {
   assert.equal(definitions.ordinary.nativePermissionError, undefined);
   assert.deepEqual(definitions.ordinary.tools, ['Read']);
   assert.equal(definitions['general-purpose'].nativePermissionError, undefined);
-  for (const definition of [definitions.guarded, definitions.ordinary]) {
-  }
 });

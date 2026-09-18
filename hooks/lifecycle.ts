@@ -13,7 +13,6 @@ export const register: Register = (on) => {
   const running = new Map<string, object>();
   on('turn.step', async function* ($, event, next) {
     // Observability only: forward every core chunk unchanged, without serving inference.
-    const key = event.agentId ?? 'main';
     void postStep($, event);
     return yield* next(event);
   });
@@ -45,27 +44,6 @@ async function postStep($: EngineInterface, event: object) {
 
 async function detach($: EngineInterface) {
   await request($, '/openrouter/mod/detach', { sessionId: await $.session.id() });
-}
-
-async function poll($: EngineInterface, agentId: string | undefined, active: () => boolean) {
-  const since = Date.now();
-  const sessionId = await $.session.id();
-  const query = `sessionId=${encodeURIComponent(sessionId)}&agentId=${encodeURIComponent(agentId ?? 'main')}`;
-  let failures = 0;
-  while (active() && failures < 5) {
-    const status = await request($, `/openrouter/mod/lifecycle?${query}`);
-    if (!active()) {
-      return;
-    }
-    failures = status ? 0 : failures + 1;
-    if (status?.state && (status.startedAt ?? 0) >= since) {
-      await $.ui.status(statusText(status, agentId));
-      if (status.state !== 'running') {
-        return;
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
 }
 
 async function request(
@@ -100,10 +78,6 @@ async function request(
   }
 }
 
-function statusText(status: Status, agentId: string | undefined) {
-  const elapsed = Math.floor((status.elapsedMs ?? 0) / 1000);
-  return `${status.model} · ${agentId ?? 'main'} · ${status.state} · ${elapsed}s ${status.detail ?? ''}`;
-}
 async function cancelCompaction($: EngineInterface, agentId?: string) {
   await request($, '/openrouter/mod/compact/cancel', { sessionId: await $.session.id(), agentId });
 }
