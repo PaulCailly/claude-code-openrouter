@@ -8,9 +8,11 @@ allowed-tools: Bash
 Tell the user to run this command in a separate terminal:
 
 ```sh
-"$HOME/.local/share/multi-cli/bin/multi" connect openrouter
+claude-openrouter connect
 ```
 
-The helper prompts privately and saves the key in OpenRouter's auth store. Tell the
-user to relaunch Claude afterward. Never accept, request, read, or print the key
-in chat or pass it as a command argument.
+The helper prompts privately and saves the key under the user's config directory
+with mode 0600. Tell them to relaunch with `claude-openrouter` afterwards. Never
+accept, request, read, or print the key in chat or pass it as a command argument.
+
+An API key is created at https://openrouter.ai/keys.

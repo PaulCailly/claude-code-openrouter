@@ -4,11 +4,12 @@ import { promisify } from 'node:util';
 
 import { executableInvocation } from '../gateway/executable.ts';
 
-const MARKETPLACE = 'cc-multi-cli-plugin';
+const MARKETPLACE = 'claude-code-openrouter';
+const PLUGIN_ID = `openrouter@${MARKETPLACE}`;
 const PROVIDERS = ['openrouter'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
-interface Plugin {
+export interface Plugin {
   id: string;
   enabled: boolean;
   scope: string;
@@ -23,35 +24,17 @@ export function providerSelection(value: string | undefined): Provider[] | undef
   return [...new Set(value.split(',').filter(Boolean))].map((id) => {
     const provider = PROVIDERS.find((name) => name === id);
     if (!provider) {
-      throw new Error(`Unknown Multi provider: ${id}`);
+      throw new Error(`Unknown provider: ${id}`);
     }
     return provider;
   });
 }
 
-/** Ask Claude for its enabled plugins rather than interpreting its cache layout. */
-export async function installedPlugins(
-  claude: string,
-  settingsArgs: string[] = [],
-  options: { platform?: NodeJS.Platform } = {},
-) {
-  const platform = options.platform ?? process.platform;
-  const invocation = executableInvocation(
-    claude,
-    [...settingsArgs, 'plugin', 'list', '--json'],
-    platform,
-  );
-  const { stdout } = await promisify(execFile)(invocation.command, invocation.args, {
-    timeout: 15000,
-    maxBuffer: 4 * 1024 * 1024,
-    encoding: 'utf8',
-    ...invocation.options,
-  });
-  const parsed: unknown = JSON.parse(stdout);
+function admit(parsed: unknown): Plugin[] {
   if (!Array.isArray(parsed)) {
     throw new Error('Claude returned an invalid plugin list. Update Claude Code and retry.');
   }
-  const plugins = parsed.filter((item): item is Plugin => {
+  return parsed.filter((item): item is Plugin => {
     return (
       item !== null &&
       typeof item === 'object' &&
@@ -62,31 +45,44 @@ export async function installedPlugins(
       path.isAbsolute(item.installPath)
     );
   });
-  for (const plugin of plugins) {
-    if (
-      plugin.enabled &&
-      plugin.id.endsWith(`@${MARKETPLACE}`) &&
-      Array.isArray(plugin.errors) &&
-      plugin.errors.length
-    ) {
-      throw new Error(
-        `Claude reports errors for ${plugin.id}. Repair the plugin installation before launching Multi.`,
+}
+
+export interface ResolveOptions {
+  list?: () => Promise<Plugin[]>;
+  claude?: string;
+  platform?: NodeJS.Platform;
+}
+
+/** The installed plugin owns the launcher; the npm bin only locates it. */
+export async function resolvePluginRoot(options: ResolveOptions = {}): Promise<string> {
+  const list =
+    options.list ??
+    (async () => {
+      const invocation = executableInvocation(
+        options.claude ?? 'claude',
+        ['plugin', 'list', '--json'],
+        options.platform ?? process.platform,
       );
-    }
+      const { stdout } = await promisify(execFile)(invocation.command, invocation.args, {
+        timeout: 15000,
+        maxBuffer: 4 * 1024 * 1024,
+        encoding: 'utf8',
+        ...invocation.options,
+      });
+      return admit(JSON.parse(stdout));
+    });
+  const plugins = await list();
+  const installed = plugins.filter((plugin) => plugin.id === PLUGIN_ID);
+  if (!installed.some((plugin) => plugin.enabled)) {
+    throw new Error(
+      `Install the plugin first: /plugin marketplace add PaulCailly/${MARKETPLACE}, then /plugin install ${PLUGIN_ID}.`,
+    );
   }
-  const core = plugins.filter(
-    (plugin) => plugin.id === `openrouter@${MARKETPLACE}` && plugin.enabled,
-  );
-  // Startup executes before the workspace trust prompt. Only a user-installed
-  // core may supply executable code here; project providers are fixed opt-ins.
-  const personalCore = core.filter((plugin) => plugin.scope === 'user');
-  if (core.length && personalCore.length !== 1) {
-    throw new Error('Install openrouter at user scope before running Multi setup.');
+  const personal = installed.find((plugin) => plugin.enabled && plugin.scope === 'user');
+  if (!personal) {
+    throw new Error('Enable the openrouter plugin at user scope before launching.');
   }
-  const providers = PROVIDERS.filter((name) =>
-    plugins.some((plugin) => plugin.id === `multi-${name}@${MARKETPLACE}` && plugin.enabled),
-  );
-  return { root: personalCore[0]?.installPath, providers };
+  return personal.installPath;
 }
 
 export function settingsArguments(args: string[]): string[] {

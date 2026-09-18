@@ -1,17 +1,15 @@
 ---
 name: uninstall
-description: Remove Multi startup files while preserving provider credentials.
+description: Explain how to remove the OpenRouter plugin, command and stored key.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
 
-Run:
+Run `claude-openrouter uninstall` to print the exact paths, then tell the user:
 
-```sh
-"$HOME/.local/share/multi-cli/bin/multi" uninstall
-```
+1. `/plugin uninstall openrouter@claude-code-openrouter`
+2. `npm rm -g claude-code-openrouter`
+3. delete the auth file and catalog cache the command printed
 
-Tell the user that Multi startup files and its marked shell block were removed.
-Provider credentials remain in their provider stores. The command does not remove
-Claude plugins; tell the user to remove those through `/plugin` when needed.
-Never accept credentials in chat.
+Nothing else was ever modified: plain `claude` is untouched and no shell
+configuration was written.

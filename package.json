@@ -1,26 +1,23 @@
 {
-  "name": "cc-multi-cli-plugin",
-  "version": "0.2.0",
-  "private": true,
+  "name": "claude-code-openrouter",
+  "version": "0.1.0",
+  "private": false,
   "type": "module",
-  "description": "Claude Code plugin providing a native model gateway that runs external models inside one Claude Code session.",
+  "description": "Use any OpenRouter model inside one Claude Code session, with Claude's own tools and permissions.",
   "engines": {
     "node": ">=24.12.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && node --test --test-timeout=120000 \"test/unit/**/*.test.ts\"",
-    "test:mod": "node --input-type=module -e \"import { spawn } from 'node:child_process'; const child = spawn('claude', ['plugin', 'test', 'plugins/openrouter'], { stdio: 'inherit', env: { ...process.env, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '1' } }); child.on('exit', (code) => { process.exitCode = code ?? 1; });\"",
-    "test:live:openrouter": "node test/live/native-openrouter.ts",
+    "test:mod": "node --input-type=module -e \"import { spawn } from 'node:child_process'; const child = spawn('claude', ['plugin', 'test', '.'], { stdio: 'inherit', env: { ...process.env, CLAUDE_CODE_ENABLE_FUNCTION_HOOKS: '1' } }); child.on('exit', (code) => { process.exitCode = code ?? 1; });\"",
     "test:live:permissions": "node test/live/native-permissions.ts",
     "format": "biome format --write .",
     "lint": "biome check --error-on-warnings .",
     "lint:fix": "biome check --write .",
     "check:unused": "knip",
-    "check": "npm run banner:check && npm run lint && npm run check:unused && npm test",
-    "banner:generate": "node scripts/banner.mjs",
-    "banner:check": "node scripts/banner.mjs --check",
-    "test:live:install": "node test/live/native-install.ts"
+    "check": "npm run lint && npm run check:unused && npm test",
+    "test:live": "node test/live/native-openrouter.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",
@@ -31,5 +28,31 @@
   "dependencies": {
     "js-tiktoken": "1.0.21",
     "yaml": "2.9.0"
-  }
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PaulCailly/claude-code-openrouter.git"
+  },
+  "homepage": "https://github.com/PaulCailly/claude-code-openrouter",
+  "bin": {
+    "claude-openrouter": "./bin/claude-openrouter.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "hooks",
+    "skills",
+    ".claude-plugin",
+    "docs",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "openrouter",
+    "llm"
+  ]
 }

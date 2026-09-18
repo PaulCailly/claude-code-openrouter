@@ -1,6 +1,6 @@
 ---
 name: status
-description: Show enabled Multi providers and the local runtime status.
+description: Show what this plugin has connected — key, catalog and credit balance.
 disable-model-invocation: true
 allowed-tools: Bash
 ---
@@ -8,9 +8,9 @@ allowed-tools: Bash
 Run:
 
 ```sh
-"$HOME/.local/share/multi-cli/bin/multi" status
+claude-openrouter status
 ```
 
-Tell the user which providers are enabled and whether the helper is installed.
-This command does not test provider authentication or inference. If it is missing,
-tell the user to run `/openrouter:setup`. Never accept credentials in chat.
+It prints the plugin path, whether a key is stored (never the key itself), the
+auth and catalog file paths, how many models are admitted, where the catalog came
+from, and the OpenRouter credit balance.

@@ -1,7 +1,6 @@
-import { fileURLToPath } from 'node:url';
-import { providerSelection } from './install/plugins.ts';
-import { run } from './install/process.ts';
-import { readOpenRouterKey, saveOpenRouterKey } from './openrouter/auth.ts';
+import { authFile, readOpenRouterKey, saveOpenRouterKey } from './openrouter/auth.ts';
+import { catalogFile, loadCatalog } from './openrouter/catalog.ts';
+import { formatCredits, readCredits } from './openrouter/usage.ts';
 
 async function secretInput(): Promise<string> {
   if (!process.stdin.isTTY) {
@@ -58,24 +57,77 @@ async function connectOpenRouter() {
   console.log('Create an OpenRouter API key at https://openrouter.ai/keys');
   await saveOpenRouterKey(await secretInput());
   console.log(
-    'OpenRouter key saved to OpenRouter auth. Relaunch Claude to load OpenRouter models.',
+    `OpenRouter key saved to ${authFile()}. Relaunch claude-openrouter to load the models.`,
+  );
+  return 0;
+}
+
+async function status() {
+  const key = await readOpenRouterKey().catch(() => undefined);
+  const credits = key ? formatCredits(await readCredits({ apiKey: key })) : undefined;
+  let catalog: { count: number; source: string; fetchedAt: string } | { error: string };
+  try {
+    const loaded = await loadCatalog();
+    catalog = { count: loaded.models.length, source: loaded.source, fetchedAt: loaded.fetchedAt };
+  } catch (error) {
+    catalog = { error: error instanceof Error ? error.message : String(error) };
+  }
+  console.log(
+    JSON.stringify(
+      {
+        plugin: process.env.OPENROUTER_PLUGIN_ROOT ?? null,
+        key: key ? 'stored' : 'missing',
+        authFile: authFile(),
+        catalogFile: catalogFile(),
+        catalog,
+        credits: credits ? { status: credits.status, summary: credits.summary } : null,
+      },
+      null,
+      2,
+    ),
+  );
+  return 0;
+}
+
+async function models() {
+  console.log(JSON.stringify((await loadCatalog()).models, null, 2));
+  return 0;
+}
+
+function uninstall() {
+  console.log(
+    [
+      'Remove the plugin:  /plugin uninstall openrouter@claude-code-openrouter',
+      'Remove the command: npm rm -g claude-code-openrouter',
+      `Remove the key:     rm ${authFile()}`,
+      `Remove the cache:   rm ${catalogFile()}`,
+      'Plain claude was never modified.',
+    ].join('\n'),
   );
   return 0;
 }
 
 async function main() {
-  const [command, provider, ...args] = process.argv.slice(2);
-  const enabled = providerSelection(process.env.OPENROUTER_ENABLED_PROVIDERS) ?? [];
-  if (!enabled.some((name) => name === provider)) {
-    throw new Error('Install and enable the openrouter plugin first.');
+  const [command, ...args] = process.argv.slice(2);
+  if (args.length) {
+    throw new Error('Usage: claude-openrouter connect | status | models | uninstall');
   }
-  if (command === 'connect' && provider === 'openrouter' && args.length === 0) {
+  if (command === 'connect') {
     return connectOpenRouter();
   }
-  throw new Error('Usage: claude-openrouter status | connect | uninstall');
+  if (command === 'status') {
+    return status();
+  }
+  if (command === 'models') {
+    return models();
+  }
+  if (command === 'uninstall') {
+    return uninstall();
+  }
+  throw new Error('Usage: claude-openrouter connect | status | models | uninstall');
 }
 
-// Browser links are emitted by the provider-owned login process. Never read tokens.
+// The key is prompted for privately and never printed.
 void main().then(
   (code) => {
     process.exitCode = code;
