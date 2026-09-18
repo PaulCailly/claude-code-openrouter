@@ -4,7 +4,29 @@ import type { GatewayFetch } from '../../src/gateway/fetch.ts';
 import type { GatewayOptions } from '../../src/gateway/server.ts';
 import { createNativeGateway } from '../../src/gateway/server.ts';
 
-const model = 'openrouter/glm-5.3';
+const catalog = [
+  {
+    id: 'z-ai/glm-5.3',
+    name: 'Z-AI: GLM 5.3',
+    contextLength: 1310720,
+    maxOutputTokens: 128000,
+    images: false,
+    reasoning: true,
+    free: false,
+    pricing: { prompt: 0.0000014, completion: 0.0000028 },
+  },
+  {
+    id: 'z-ai/glm-5.2',
+    name: 'Z-AI: GLM 5.2',
+    contextLength: 200000,
+    maxOutputTokens: 96000,
+    images: false,
+    reasoning: false,
+    free: false,
+    pricing: { prompt: 0.0000006, completion: 0.0000022 },
+  },
+] as const;
+const model = 'openrouter/z-ai/glm-5.3';
 const request = {
   model,
   max_tokens: 1024,
@@ -33,7 +55,7 @@ test('disabled providers reject typed models and token counts without upstream r
     const response = await fetch(`${url}${endpoint}`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ...request, model: 'openrouter/glm-5.3' }),
+      body: JSON.stringify({ ...request, model: 'openrouter/z-ai/glm-5.3' }),
     });
     assert.equal(response.status, 400);
     assert.match(await response.text(), /not enabled/);
@@ -74,7 +96,7 @@ async function gateway(
 ) {
   const server = createNativeGateway({
     token: 'local-fixture-token',
-    openrouter: { apiKey: 'openrouter-secret-fixture' },
+    openrouter: { apiKey: 'openrouter-secret-fixture', models: catalog },
     blockAnthropic: true,
     fetchImpl,
     ...extra,
@@ -103,7 +125,7 @@ function post(base: string, body: unknown = request, extraHeaders = {}) {
 test('OpenRouter isolates credentials, keeps cache affinity over restarts, and reports cache writes', async (t) => {
   const sent: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
   const upstream: GatewayFetch = async (url, init) => {
-    assert.equal(url, 'https://opencode.ai/openrouter/v1/chat/completions');
+    assert.equal(url, 'https://openrouter.ai/api/v1/chat/completions');
     assert.equal(init.redirect, 'error');
     assert.equal(init.headers.authorization, 'Bearer openrouter-secret-fixture');
     assert.equal(init.headers['x-api-key'], undefined);
@@ -127,9 +149,9 @@ test('OpenRouter isolates credentials, keeps cache affinity over restarts, and r
   assert.deepEqual(sent[0], sent[1]);
   assert.equal(sent[0].body.max_tokens, 1024);
   await (await post(restarted, request, { 'x-claude-code-agent-id': 'worker-one' })).arrayBuffer();
-  await (await post(restarted, { ...request, model: 'openrouter/glm-5.2' })).arrayBuffer();
-  assert.notEqual(sent[0].headers['x-opencode-session'], sent[2].headers['x-opencode-session']);
-  assert.notEqual(sent[0].headers['x-opencode-session'], sent[3].headers['x-opencode-session']);
+  await (await post(restarted, { ...request, model: 'openrouter/z-ai/glm-5.2' })).arrayBuffer();
+  assert.notEqual(sent[0].headers['x-openrouter-session'], sent[2].headers['x-openrouter-session']);
+  assert.notEqual(sent[0].headers['x-openrouter-session'], sent[3].headers['x-openrouter-session']);
 });
 
 test('OpenRouter admission and counting never invoke inference; errors retain status without secrets or retries', async (t) => {
@@ -147,7 +169,7 @@ test('OpenRouter admission and counting never invoke inference; errors retain st
   const count = await counted.json();
   assert(count && typeof count === 'object' && 'input_tokens' in count);
   assert(typeof count.input_tokens === 'number' && count.input_tokens > 0);
-  const bad = await post(base, { ...request, model: 'openrouter/not-a-model' });
+  const bad = await post(base, { ...request, model: 'openrouter/nope/nope' });
   assert.equal(bad.status, 400);
   const missing = await gateway(
     t,
@@ -202,7 +224,7 @@ test('OpenRouter refuses invalid credential headers and missing terminal billing
     () =>
       createNativeGateway({
         token: 'fixture',
-        openrouter: { apiKey: 'secret\nvalue' },
+        openrouter: { apiKey: 'secret\nvalue', models: catalog },
       }),
     (error: unknown) =>
       error instanceof Error && !error.message.includes('secret') && /API key/.test(error.message),

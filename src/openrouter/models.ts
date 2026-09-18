@@ -1,286 +1,134 @@
 import type { Effort } from '../gateway/effort.ts';
+import type { CatalogModel } from './catalog.ts';
 
-type OpenRouterProtocol = 'responses' | 'chat';
+const PREFIX = 'openrouter/';
 
-export interface OpenRouterModel {
-  id: string;
-  protocol: OpenRouterProtocol;
-  label: string;
-  description: string;
-  efforts?: readonly Effort[];
-  images: boolean;
-  documents: boolean;
-  maxOutputTokens: number;
-}
-
-export interface ModelOption extends OpenRouterModel {
-  model: string;
-  worker: string;
-  nativeWorker: true;
-}
-
-export interface OpenRouterWorker {
-  model: string;
-  effort?: Effort;
-}
-
-const GPT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const satisfies readonly Effort[];
-
-// Bounded catalog from OpenRouter's models.dev snapshot:
-// github.com/anomalyco/opencode/blob/830d5eb5354874105cc31599635a80c1662609e8/packages/opencode/test/tool/fixtures/models-api.json
-// OpenRouter's /models endpoint exposes IDs only, so capabilities stay explicit and conservative.
-export const OPENROUTER_MODELS: readonly OpenRouterModel[] = Object.freeze([
-  {
-    id: 'gpt-5.6-luna',
-    protocol: 'responses',
-    label: 'GPT-5.6 Luna',
-    description: 'OpenRouter · GPT Responses',
-    efforts: GPT_EFFORTS,
-    images: true,
-    documents: true,
-    maxOutputTokens: 128000,
-  },
-  {
-    id: 'gpt-5.6-terra',
-    protocol: 'responses',
-    label: 'GPT-5.6 Terra',
-    description: 'OpenRouter · GPT Responses',
-    efforts: GPT_EFFORTS,
-    images: true,
-    documents: true,
-    maxOutputTokens: 128000,
-  },
-  {
-    id: 'gpt-5.6-sol',
-    protocol: 'responses',
-    label: 'GPT-5.6 Sol',
-    description: 'OpenRouter · GPT Responses',
-    efforts: GPT_EFFORTS,
-    images: true,
-    documents: true,
-    maxOutputTokens: 128000,
-  },
-  {
-    id: 'kimi-k2.7-code',
-    protocol: 'chat',
-    label: 'Kimi K2.7 Code',
-    description: 'OpenRouter · Chat Completions',
-    images: true,
-    documents: false,
-    maxOutputTokens: 262144,
-  },
-  {
-    id: 'glm-5.2',
-    protocol: 'chat',
-    label: 'GLM-5.2',
-    description: 'OpenRouter · Chat Completions',
-    images: false,
-    documents: false,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'minimax-m2.7',
-    protocol: 'chat',
-    label: 'MiniMax-M2.7',
-    description: 'OpenRouter · Chat Completions',
-    images: false,
-    documents: false,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'big-pickle',
-    protocol: 'chat',
-    label: 'Big Pickle',
-    description: 'OpenRouter · Chat Completions',
-    images: false,
-    documents: false,
-    maxOutputTokens: 32000,
-  },
-  // Free catalog verified against OpenRouter /v1/models and models.dev on 2026-09-09.
-  {
-    id: 'mimo-v2.5-free',
-    protocol: 'chat',
-    label: 'MiMo V2.5 Free',
-    description: 'OpenRouter · Free',
-    images: true,
-    documents: false,
-    maxOutputTokens: 32000,
-  },
-  {
-    id: 'ling-3.0-flash-fin-free',
-    protocol: 'chat',
-    label: 'Ling 3.0 Flash Fin Free',
-    description: 'OpenRouter · Free',
-    images: false,
-    documents: false,
-    maxOutputTokens: 32768,
-  },
-  {
-    id: 'nemotron-3-ultra-free',
-    protocol: 'chat',
-    label: 'Nemotron 3 Ultra Free',
-    description: 'OpenRouter · Free',
-    images: false,
-    documents: false,
-    maxOutputTokens: 128000,
-  },
-  {
-    id: 'nemotron-3.5-lightning-free',
-    protocol: 'chat',
-    label: 'Nemotron 3.5 Lightning Free',
-    description: 'OpenRouter · Free',
-    images: false,
-    documents: false,
-    maxOutputTokens: 262144,
-  },
-  {
-    id: 'muse-spark-1.3-contributor-free',
-    protocol: 'responses',
-    label: 'Muse Spark 1.3 Free',
-    description: 'OpenRouter · Free',
-    efforts: ['low', 'medium', 'high', 'xhigh'],
-    images: true,
-    documents: true,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'muse-spark-1.2-contributor-free',
-    protocol: 'responses',
-    label: 'Muse Spark 1.2 Free',
-    description: 'OpenRouter · Free',
-    efforts: ['low', 'medium', 'high', 'xhigh'],
-    images: true,
-    documents: true,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'deepseek-v4-pro',
-    protocol: 'chat',
-    label: 'DeepSeek V4 Pro',
-    description: 'OpenRouter · Chat Completions',
-    images: false,
-    documents: false,
-    maxOutputTokens: 384000,
-  },
-  {
-    id: 'deepseek-v4-flash',
-    protocol: 'chat',
-    label: 'DeepSeek V4 Flash',
-    description: 'OpenRouter · Chat Completions',
-    images: false,
-    documents: false,
-    maxOutputTokens: 384000,
-  },
-  {
-    id: 'kimi-k3',
-    protocol: 'chat',
-    label: 'Kimi K3',
-    description: 'OpenRouter · Chat Completions',
-    images: true,
-    documents: false,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'glm-5.3',
-    protocol: 'chat',
-    label: 'GLM-5.3',
-    description: 'OpenRouter · Chat Completions',
-    images: false,
-    documents: false,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'glm-5.3-flash',
-    protocol: 'chat',
-    label: 'GLM-5.3-Flash',
-    description: 'OpenRouter · Chat Completions',
-    images: true,
-    documents: false,
-    maxOutputTokens: 131072,
-  },
-  {
-    id: 'muse-spark-1.3',
-    protocol: 'responses',
-    label: 'Muse Spark 1.3',
-    description: 'OpenRouter · Responses',
-    efforts: GPT_EFFORTS,
-    images: true,
-    documents: true,
-    maxOutputTokens: 131072,
-  },
+/**
+ * Curation is static on purpose: the catalog carries no ranking field, so a live
+ * sort would reorder the picker at random. Ids missing from the live catalog drop
+ * out silently, which shrinks the list instead of breaking the launch.
+ */
+export const RECOMMENDED_IDS: readonly string[] = Object.freeze([
+  'anthropic/claude-sonnet-5',
+  'openai/gpt-6-astra',
+  'google/gemini-3.8-flash',
+  'x-ai/grok-4.6',
+  'moonshotai/kimi-k3',
+  'z-ai/glm-5.3',
+  'deepseek/deepseek-v4.1-flash',
+  'qwen/qwen3.8-max-0902',
 ]);
 
-// Curated default picker; other supported models remain explicitly selectable.
-const DEFAULT_MODELS = [
-  'deepseek-v4-pro',
-  'deepseek-v4-flash',
-  'kimi-k3',
-  'glm-5.3',
-  'glm-5.3-flash',
-  'muse-spark-1.3',
-];
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 
-const modelById = new Map(OPENROUTER_MODELS.map((model) => [model.id, model]));
-
-function workerName(id: string): string {
-  return `openrouter-${id}`;
+export interface ModelOption {
+  model: string;
+  worker: string;
+  label: string;
+  description: string;
+  catalog: CatalogModel;
 }
 
-function route(id: string): string {
-  return `openrouter/${id}`;
+export interface WorkerModel {
+  model: string;
+  effort?: ReasoningEffort;
 }
 
-/** Build picker rows, optionally intersected with a discovered OpenRouter catalog. */
-export function openrouterModelOptions(availableIds?: readonly string[]): ModelOption[] {
-  const available = availableIds === undefined ? undefined : new Set(availableIds);
-  return OPENROUTER_MODELS.filter((model) => available?.has(model.id) ?? true).map((model) => ({
-    ...model,
-    model: route(model.id),
-    worker: workerName(model.id),
-    nativeWorker: true,
-  }));
+export function routeId(id: string): string {
+  return `${PREFIX}${id}`;
 }
 
-export const OPENROUTER_WORKERS: Readonly<Record<string, OpenRouterWorker>> = Object.freeze(
-  Object.fromEntries(
-    OPENROUTER_MODELS.flatMap((model) => {
-      const base = [
-        [workerName(model.id), { model: route(model.id), effort: defaultEffort(model) }],
-      ];
-      const efforts = (model.efforts ?? []).map((effort) => [
-        `${workerName(model.id)}-${effort}`,
-        { model: route(model.id), effort },
-      ]);
-      return [...base, ...efforts];
-    }),
-  ),
-);
-
-function defaultEffort(model: OpenRouterModel): Effort | undefined {
-  return model.efforts?.includes('medium') ? 'medium' : undefined;
+export function catalogId(route: string): string | undefined {
+  const id = route.startsWith(PREFIX) ? route.slice(PREFIX.length) : '';
+  return id || undefined;
 }
 
-export function openrouterModel(id: string): OpenRouterModel | undefined {
-  return modelById.get(id);
+export function workerName(id: string): string {
+  return `openrouter-${id.replaceAll(/[/:]/g, '-')}`;
 }
 
-/** Restrict OpenRouter rows without hiding subscription providers. */
-export function openrouterPickerOptions(selection: string | undefined): ModelOption[] {
-  if (selection === undefined) {
-    return openrouterModelOptions(DEFAULT_MODELS);
+function describe(model: CatalogModel): string {
+  const parts = [`${Math.round(model.contextLength / 1000)}k context`];
+  parts.push(model.reasoning ? 'effort supported' : 'native reasoning; /effort not applicable');
+  if (model.images) {
+    parts.push('images');
   }
-  return [
+  parts.push(
+    model.free ? 'free tier' : `$${(model.pricing.prompt * 1e6).toFixed(2)}/M input tokens`,
+  );
+  return `OpenRouter · ${parts.join(' · ')}`;
+}
+
+function option(model: CatalogModel): ModelOption {
+  return {
+    model: routeId(model.id),
+    worker: workerName(model.id),
+    label: model.name,
+    description: describe(model),
+    catalog: model,
+  };
+}
+
+/** `undefined` selects the recommended rows; `''` hides every OpenRouter row. */
+export function pickerOptions(
+  models: readonly CatalogModel[],
+  selection: string | undefined,
+): ModelOption[] {
+  const byId = new Map(models.map((model) => [model.id, model]));
+  if (selection === undefined) {
+    return RECOMMENDED_IDS.flatMap((id) => {
+      const model = byId.get(id);
+      return model ? [option(model)] : [];
+    });
+  }
+  const ids = [
     ...new Set(
       selection
         .split(',')
         .map((id) => id.trim())
         .filter(Boolean),
     ),
-  ].map((id) => {
-    const option = openrouterModelOptions([id])[0];
-    if (!option) {
-      throw new Error(`OPENROUTER_MODELS: unknown OpenRouter model: ${id}`);
+  ];
+  return ids.map((id) => {
+    const model = byId.get(id);
+    if (!model) {
+      throw new Error(
+        `OPENROUTER_MODELS: unknown or tool-incapable OpenRouter model: ${id}. Run claude-openrouter models for the admitted catalog.`,
+      );
     }
-    return option;
+    return option(model);
   });
+}
+
+export function workerDefinitions(options: readonly ModelOption[]): Record<string, WorkerModel> {
+  const agents: Record<string, WorkerModel> = {};
+  for (const item of options) {
+    agents[item.worker] = {
+      model: item.model,
+      ...(item.catalog.reasoning ? { effort: 'medium' as const } : {}),
+    };
+    if (!item.catalog.reasoning) {
+      continue;
+    }
+    for (const effort of ['low', 'medium', 'high'] as const) {
+      agents[`${item.worker}-${effort}`] = { model: item.model, effort };
+    }
+  }
+  return agents;
+}
+
+/** OpenRouter exposes three levels; Claude's xhigh and max clamp to high. */
+export function reasoningEffort(
+  model: CatalogModel,
+  effort: Effort | undefined,
+): ReasoningEffort | undefined {
+  if (effort === undefined) {
+    return undefined;
+  }
+  if (!model.reasoning) {
+    throw new Error(
+      `${model.id} does not support effort ${effort}. Reset /effort to auto to use its native default.`,
+    );
+  }
+  return effort === 'low' || effort === 'medium' ? effort : 'high';
 }

@@ -11,7 +11,8 @@ import type { MessagesResponse } from '../../src/gateway/messages.ts';
 import { createNativeGateway, type GatewayOptions } from '../../src/gateway/server.ts';
 import { readSse } from '../../src/gateway/sse.ts';
 import { readOpenRouterKey } from '../../src/openrouter/auth.ts';
-import { openrouterModel, openrouterPickerOptions } from '../../src/openrouter/models.ts';
+import { loadCatalog } from '../../src/openrouter/catalog.ts';
+import { pickerOptions } from '../../src/openrouter/models.ts';
 import { isolatedEnvironment } from './environment.ts';
 
 interface UsageSample {
@@ -95,11 +96,13 @@ function requireApiKey(value: string | undefined): string {
   return value;
 }
 const apiKey = requireApiKey(await readOpenRouterKey());
+const catalog = await loadCatalog();
+const catalogModel = (id: string) => catalog.models.find((entry) => entry.id === id);
 assert(!option('--model') || model.length > 0, '--model requires a non-empty model id');
 assert(!switchedModel || switchedModel.length > 0, '--switch requires a non-empty model id');
-assert(openrouterModel(model), `Unsupported OpenRouter model: ${model}`);
+assert(catalogModel(model), `Unsupported OpenRouter model: ${model}`);
 if (switchedModel) {
-  assert(openrouterModel(switchedModel), `Unsupported OpenRouter model: ${switchedModel}`);
+  assert(catalogModel(switchedModel), `Unsupported OpenRouter model: ${switchedModel}`);
   assert.notEqual(switchedModel, model, '--switch must select a different model');
 }
 assert(Number.isFinite(minCacheRatio) && minCacheRatio >= 0 && minCacheRatio <= 1);
@@ -115,12 +118,12 @@ await writeFile(
   settingsFile,
   JSON.stringify({
     modelPicker: {
-      options: openrouterPickerOptions(pickerModels.join(',')).map(
-        ({ model: pickerModel, label, efforts }) => ({
+      options: pickerOptions(catalog.models, pickerModels.join(',')).map(
+        ({ model: pickerModel, label, description, catalog: entry }) => ({
           model: pickerModel,
           label: `OpenRouter · ${label}`,
-          behavesAs: efforts?.length ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
-          description: `OpenRouter API billing · Claude tools${efforts ? '' : ' · native reasoning; /effort not applicable'}`,
+          behavesAs: entry.reasoning ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
+          description,
         }),
       ),
     },
@@ -255,7 +258,7 @@ function createGateway() {
   const options: GatewayOptions = {
     token: gatewayToken,
     blockAnthropic: true,
-    openrouter: { apiKey },
+    openrouter: { apiKey, models: catalog.models },
     fetchImpl,
   };
   return createNativeGateway(options);
@@ -293,7 +296,7 @@ async function runClaude(
       sessionId,
       '--model',
       `openrouter/${selectedModel}`,
-      ...(openrouterModel(selectedModel)?.protocol === 'responses' ? ['--effort', 'low'] : []),
+      ...(catalogModel(selectedModel)?.reasoning ? ['--effort', 'low'] : []),
       ...(useTools ? ['--tools', 'Read', '--allowedTools', 'Read'] : ['--tools', '']),
       '--strict-mcp-config',
       '--settings',

@@ -134,6 +134,14 @@ async function writeCache(file: string, payload: string): Promise<void> {
 /** The network owns the catalog; the cache only covers an outage. */
 export async function loadCatalog(options: CatalogOptions = {}): Promise<CatalogLoad> {
   const file = catalogFile(options);
+  // An explicit file pins the catalog: read it and never call upstream.
+  if ((options.env ?? process.env).OPENROUTER_CATALOG_FILE) {
+    const pinned = await readCache(file);
+    if (!pinned) {
+      throw new CatalogError(`OPENROUTER_CATALOG_FILE is unreadable or invalid: ${file}`);
+    }
+    return pinned;
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(1, options.timeoutMs ?? 10000));
   try {

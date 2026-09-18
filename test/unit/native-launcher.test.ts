@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -8,7 +8,11 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { AgentCatalog } from '../../src/gateway/agent-catalog.ts';
 import { checkLauncherArgumentLimit, workerDefinitions } from '../../src/launcher.ts';
-import { OPENROUTER_MODELS } from '../../src/openrouter/models.ts';
+import { parseCatalog } from '../../src/openrouter/catalog.ts';
+import { pickerOptions } from '../../src/openrouter/models.ts';
+
+const catalogFixture = fileURLToPath(new URL('../fixtures/models.json', import.meta.url));
+const catalogPayload: unknown = JSON.parse(await readFile(catalogFixture, 'utf8'));
 
 async function writeClaudeFixture(bin: string, source: string): Promise<void> {
   if (process.platform === 'win32') {
@@ -216,7 +220,7 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
   const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   const { stdout } = await promisify(execFile)(
     process.execPath,
-    [launcher, '--', '--model', 'openrouter/gpt-5.6-luna', '--dangerously-skip-permissions'],
+    [launcher, '--', '--model', 'openrouter/x/plain-tools', '--dangerously-skip-permissions'],
     {
       cwd,
       timeout: 20000,
@@ -228,6 +232,7 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
         CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
         CODEX_HOME: cwd,
         OPENROUTER_API_KEY: 'openrouter-fixture-key',
+        OPENROUTER_CATALOG_FILE: catalogFixture,
       },
     },
   );
@@ -235,36 +240,25 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
   const pickerModels = result.settings.modelPicker.options.map(
     (option: { model: string }) => option.model,
   );
-  assert(pickerModels.includes('openrouter/deepseek-v4-pro'));
-  assert(pickerModels.includes('openrouter/muse-spark-1.3'));
+  // Only recommended ids present in the catalog become rows.
+  assert.deepEqual(pickerModels, [
+    'openrouter/anthropic/claude-sonnet-5',
+    'openrouter/z-ai/glm-5.3',
+  ]);
   assert.equal(
     result.settings.modelPicker.options.find(
-      (row: { model: string }) => row.model === 'openrouter/muse-spark-1.3',
+      (row: { model: string }) => row.model === 'openrouter/z-ai/glm-5.3',
     ).behavesAs,
     'claude-sonnet-4-6',
   );
-  assert.equal(
-    result.settings.modelPicker.options.find(
-      (row: { model: string }) => row.model === 'openrouter/deepseek-v4-pro',
-    ).behavesAs,
-    'claude-haiku-4-5',
-  );
-  assert.match(
-    result.settings.modelPicker.options.find(
-      (row: { model: string }) => row.model === 'openrouter/deepseek-v4-pro',
-    ).description,
-    /effort not applicable/,
-  );
-  assert(!pickerModels.includes('openrouter/gpt-5.6-luna'));
-  assert(!pickerModels.includes('openrouter/big-pickle'));
-  assert(result.agents.includes('openrouter-gpt-5.6-luna'));
-  assert(result.agents.includes('openrouter-gpt-5.6-luna-high'));
-  assert(result.agents.includes('openrouter-big-pickle'));
-  assert(!result.agents.includes('openrouter-big-pickle-medium'));
+  assert(!pickerModels.includes('openrouter/x/plain-tools'));
+  assert(result.agents.includes('openrouter-anthropic-claude-sonnet-5'));
+  assert(result.agents.includes('openrouter-anthropic-claude-sonnet-5-high'));
+  assert(!result.agents.includes('openrouter-x-plain-tools'));
   assert.equal(result.zenKeyInChild, undefined);
   assert.equal(result.settings.permissions.disableAutoMode, 'disable');
   assert(result.args.includes('--dangerously-skip-permissions'));
-  assert.deepEqual(result.models, ['openrouter/gpt-5.6-luna']);
+  assert.deepEqual(result.models, ['openrouter/x/plain-tools']);
   const disabled = await promisify(execFile)(process.execPath, [launcher], {
     cwd,
     timeout: 20000,
@@ -295,15 +289,18 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
         CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
         CODEX_HOME: cwd,
         OPENROUTER_API_KEY: 'openrouter-fixture-key',
+        OPENROUTER_CATALOG_FILE: catalogFixture,
         OPENROUTER_MODELS: selection,
       },
     });
-  const filtered = JSON.parse((await launchFiltered(' big-pickle, glm-5.2,big-pickle ')).stdout);
+  const filtered = JSON.parse(
+    (await launchFiltered(' x/plain-tools, z-ai/glm-5.3,x/plain-tools ')).stdout,
+  );
   assert.deepEqual(
     filtered.settings.modelPicker.options.map((option: { model: string }) => option.model),
-    ['openrouter/big-pickle', 'openrouter/glm-5.2'],
+    ['openrouter/x/plain-tools', 'openrouter/z-ai/glm-5.3'],
   );
-  assert(filtered.agents.includes('openrouter-big-pickle'));
+  assert(filtered.agents.includes('openrouter-x-plain-tools'));
   const hidden = JSON.parse((await launchFiltered('')).stdout);
   assert.deepEqual(hidden.settings.modelPicker.options, []);
   await assert.rejects(launchFiltered('typo'), /OPENROUTER_MODELS/);
@@ -315,12 +312,12 @@ test('OpenRouter saved auth supplies the no-login fallback without exposing cred
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-openrouter-saved-test-'));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const bin = path.join(cwd, 'bin');
-  const data = path.join(cwd, 'data', 'opencode');
+  const config = path.join(cwd, 'config', 'claude-code-openrouter');
   await mkdir(bin);
-  await mkdir(data, { recursive: true });
+  await mkdir(config, { recursive: true });
   await writeFile(
-    path.join(data, 'auth.json'),
-    JSON.stringify({ opencode: { type: 'api', key: 'saved-openrouter-fixture-key' } }),
+    path.join(config, 'auth.json'),
+    JSON.stringify({ openrouter: { type: 'api', key: 'saved-openrouter-fixture-key' } }),
   );
   await writeClaudeFixture(
     bin,
@@ -342,28 +339,29 @@ result(JSON.stringify({settings,models:args.filter(x=>x.startsWith('openrouter/'
       PATH: `${bin}${path.delimiter}${process.env.PATH}`,
       HOME: cwd,
       ...windowsHome(cwd),
-      XDG_DATA_HOME: path.join(cwd, 'data'),
+      XDG_CONFIG_HOME: path.join(cwd, 'config'),
       CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
-      CODEX_HOME: cwd,
-      OPENROUTER_MODELS: 'mimo-v2.5-free,big-pickle',
+      OPENROUTER_CATALOG_FILE: catalogFixture,
+      OPENROUTER_MODELS: 'x/plain-tools,z-ai/glm-5.3',
     },
   });
   const result = JSON.parse(stdout);
-  assert.deepEqual(result.models, ['openrouter/mimo-v2.5-free']);
+  assert.deepEqual(result.models, ['openrouter/x/plain-tools']);
   assert.equal(result.zenKeyInChild, undefined);
   assert.deepEqual(
     result.settings.modelPicker.options.map((option: { model: string }) => option.model),
-    ['openrouter/mimo-v2.5-free', 'openrouter/big-pickle'],
+    ['openrouter/x/plain-tools', 'openrouter/z-ai/glm-5.3'],
   );
 });
 
 test('launcher registers OpenRouter workers and keeps the representative catalog under 30 KB', () => {
-  const agents = workerDefinitions(true);
+  const rows = pickerOptions(parseCatalog(catalogPayload), undefined);
+  const agents = workerDefinitions(rows);
   const definitions = JSON.stringify(agents);
   const definitionBytes = Buffer.byteLength(definitions);
   assert(Object.keys(agents).every((name) => name.startsWith('openrouter-')));
   assert(definitionBytes < 30000, `representative worker JSON was ${definitionBytes} bytes`);
-  assert.equal(OPENROUTER_MODELS.length, 19);
+  assert.equal(rows.length, 2);
 });
 
 test('launcher argument limits are platform-aware and identify largest providers', () => {
@@ -416,13 +414,16 @@ test('the OpenRouter model listing is available without authentication', async (
     [launcher, '--openrouter-models'],
     {
       timeout: 20000,
+      maxBuffer: 8 * 1024 * 1024,
       env: {
         PATH: process.env.PATH,
         HOME: os.tmpdir(),
         XDG_DATA_HOME: path.join(os.tmpdir(), 'missing-openrouter-data'),
+        OPENROUTER_CATALOG_FILE: catalogFixture,
       },
     },
   );
   const models = JSON.parse(stdout);
-  assert(models.some((model: { id: string }) => model.id === 'big-pickle'));
+  assert(models.some((model: { id: string }) => model.id === 'anthropic/claude-sonnet-5'));
+  assert(!models.some((model: { id: string }) => model.id === 'meta/no-tools-model'));
 });

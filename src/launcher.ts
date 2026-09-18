@@ -23,11 +23,10 @@ import type { GatewayEvent } from './gateway/server.ts';
 import { createNativeGateway } from './gateway/server.ts';
 import { providerSelection } from './install/plugins.ts';
 import { readOpenRouterKey } from './openrouter/auth.ts';
-import {
-  OPENROUTER_MODELS,
-  OPENROUTER_WORKERS,
-  openrouterPickerOptions,
-} from './openrouter/models.ts';
+import type { CatalogModel } from './openrouter/catalog.ts';
+import { loadCatalog } from './openrouter/catalog.ts';
+import type { ModelOption as OpenRouterOption } from './openrouter/models.ts';
+import { workerDefinitions as openrouterWorkers, pickerOptions } from './openrouter/models.ts';
 
 const enabledProviders = providerSelection(process.env.OPENROUTER_ENABLED_PROVIDERS);
 const providerEnabled = (provider: string) =>
@@ -74,16 +73,18 @@ async function main() {
   const pluginRoot = await findPluginRoot(fileURLToPath(import.meta.url));
   await assertFunctionHooksSupported();
   const anthropic = await anthropicSignedIn();
-  const zenKey = providerEnabled('openrouter') ? await readOpenRouterKey() : undefined;
+  const apiKey = providerEnabled('openrouter') ? await readOpenRouterKey() : undefined;
+  const catalog = apiKey ? await discoverCatalog() : undefined;
+  const rows = catalog ? pickerOptions(catalog.models, process.env.OPENROUTER_MODELS) : [];
   const token = randomBytes(32).toString('hex');
-  const settings = pickerSettings(Boolean(zenKey));
+  const settings = pickerSettings(rows);
   await mergeSettings(args, settings);
   // The supervisor does not transfer --agents or our session-local gateway env,
   // and can outlive the child whose exit releases settingsDir and the gateway.
   // Keep ordinary background subagent tasks available within this owned session.
   settings.disableAgentView = true;
   const callerSettings = structuredClone(settings);
-  const agents = workerDefinitions(Boolean(zenKey));
+  const agents = workerDefinitions(rows);
   const modBridge = new ModBridge();
   const settingsDir = await mkdtemp(path.join(os.tmpdir(), 'openrouter-settings-'));
   const callerSettingsFile = path.join(settingsDir, 'caller-settings.json');
@@ -112,7 +113,10 @@ async function main() {
     token,
     enabledProviders,
     modBridge,
-    openrouter: zenKey ? { apiKey: zenKey } : undefined,
+    openrouter:
+      apiKey && catalog
+        ? { apiKey, models: catalog.models, providerJson: process.env.OPENROUTER_PROVIDER }
+        : undefined,
     permissionModes,
     blockAnthropic: !anthropic,
     guardAuto: true,
@@ -386,11 +390,11 @@ async function anthropicSignedIn(): Promise<boolean> {
   return parseAuthProbeOutput(stdout);
 }
 
-export function workerDefinitions(openrouter: boolean) {
+export function workerDefinitions(rows: readonly OpenRouterOption[]) {
   const agents: Record<string, AgentDefinition> = {};
-  for (const [name, option] of Object.entries(openrouter ? OPENROUTER_WORKERS : {})) {
+  for (const [name, option] of Object.entries(openrouterWorkers(rows))) {
     agents[name] = {
-      description: `OpenRouter ${option.model}${option.effort ? `, ${option.effort} effort` : ''}. Uses native Claude Code tools.`,
+      description: `OpenRouter ${option.model.replace('openrouter/', '')}${option.effort ? `, ${option.effort} effort` : ''}. Uses native Claude Code tools.`,
       prompt: WORKER_PROMPT,
       model: option.model,
       tools: ['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write'],
@@ -502,7 +506,7 @@ function configureApproval(settings: LaunchSettings, anthropic = false) {
 
 async function handleCommand(command?: string) {
   if (command === '--openrouter-models') {
-    console.log(JSON.stringify(OPENROUTER_MODELS, null, 2));
+    console.log(JSON.stringify((await loadCatalog()).models, null, 2));
     process.exit(0);
   }
   if (command === '--help') {
@@ -563,22 +567,27 @@ function pickerProfile(adjustableEffort: boolean): string {
   return adjustableEffort ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
 }
 
-function pickerSettings(openrouter: boolean) {
+function pickerSettings(rows: readonly OpenRouterOption[]) {
   const settings: LaunchSettings = {
     modelPicker: {
-      options: [
-        ...(openrouter ? openrouterPickerOptions(process.env.OPENROUTER_MODELS) : []).map(
-          ({ model, label, efforts }) => ({
-            model,
-            label: `OpenRouter · ${label}`,
-            behavesAs: pickerProfile(Boolean(efforts?.length)),
-            description: `OpenRouter API billing · Claude tools${efforts ? '' : ' · native reasoning; /effort not applicable'}`,
-          }),
-        ),
-      ],
+      options: rows.map(({ model, label, description, catalog }) => ({
+        model,
+        label: `OpenRouter · ${label}`,
+        behavesAs: pickerProfile(catalog.reasoning),
+        description,
+      })),
     },
   };
   return settings;
+}
+
+/** A cached catalog keeps a session usable during an OpenRouter outage. */
+async function discoverCatalog() {
+  const catalog = await loadCatalog();
+  if (catalog.source === 'cache') {
+    console.error(`Using the cached OpenRouter catalog from ${catalog.fetchedAt}.`);
+  }
+  return catalog;
 }
 
 /**

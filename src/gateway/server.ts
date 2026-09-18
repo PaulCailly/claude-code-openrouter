@@ -5,9 +5,11 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { validateKey } from '../openrouter/auth.ts';
+import type { CatalogModel } from '../openrouter/catalog.ts';
 import { fromChat } from '../openrouter/chat.ts';
+import { catalogId } from '../openrouter/models.ts';
 import { openrouterRequest } from '../openrouter/request.ts';
-import { formatOpenRouterQuota, readOpenRouterQuota } from '../openrouter/usage.ts';
+import { formatCredits, readCredits } from '../openrouter/usage.ts';
 import type { AgentCatalog } from './agent-catalog.ts';
 import { forAnthropic } from './anthropic.ts';
 import type { GatewayFetch } from './fetch.ts';
@@ -25,6 +27,7 @@ import { forwardObservedTools, ToolObserver } from './tool-observer.ts';
 import { originalToolNames } from './tools.ts';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_BODY = 8 * 1024 * 1024;
 const STRIPPED_REQUEST_HEADERS = [
   'host',
@@ -72,7 +75,12 @@ export interface GatewayOptions {
   fetchImpl?: GatewayFetch;
   onEvent?: (event: GatewayEvent) => void;
   timeoutMs?: number;
-  openrouter?: { apiKey: string };
+  openrouter?: {
+    apiKey: string;
+    models: readonly CatalogModel[];
+    /** Raw OPENROUTER_PROVIDER routing preferences, validated per request. */
+    providerJson?: string;
+  };
   /** No Anthropic credentials: also block passthrough. */
   blockAnthropic?: boolean;
   guardAuto?: boolean;
@@ -148,8 +156,7 @@ export function createNativeGateway({
     new ProviderUsageDashboard({
       enabled: (enabledProviders ?? ['openrouter']).filter(() => Boolean(openrouter)),
       openrouter: openrouter
-        ? async () =>
-            formatOpenRouterQuota(await readOpenRouterQuota({ apiKey: openrouter.apiKey }))
+        ? async () => formatCredits(await readCredits({ apiKey: openrouter.apiKey }))
         : undefined,
     });
   const onEvent = (event: GatewayEvent) => {
@@ -181,7 +188,7 @@ export function createNativeGateway({
         'OpenRouter is not configured. Set OPENROUTER_API_KEY or connect OpenRouter.',
       );
     }
-    const prepared = prepareOpenRouterRequest(exchange, fallbackSession);
+    const prepared = prepareOpenRouterRequest(exchange, fallbackSession, openrouter);
     if (url.pathname === '/v1/messages/count_tokens') {
       res.writeHead(200, {
         'content-type': 'application/json',
@@ -190,14 +197,15 @@ export function createNativeGateway({
       return res.end(JSON.stringify({ input_tokens: prepared.inputTokens }));
     }
     onEvent({ route: 'openrouter-request', agentId, model: body.model });
-    const upstream = await fetchImpl(`https://opencode.ai/openrouter/v1/${prepared.endpoint}`, {
+    const upstream = await fetchImpl(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${openrouter.apiKey}`,
         'content-type': 'application/json',
         accept: 'text/event-stream',
-        'x-opencode-session': prepared.cacheKey,
-        'x-opencode-client': 'cc-multi-cli-plugin',
+        'http-referer': 'https://github.com/PaulCailly/claude-code-openrouter',
+        'x-title': 'claude-code-openrouter',
+        'x-openrouter-session': prepared.cacheKey,
       },
       body: JSON.stringify(prepared.body),
       signal,
@@ -229,7 +237,7 @@ export function createNativeGateway({
     if (result.stop_reason === 'stop_sequence') {
       exchange.abort.abort();
     }
-    onEvent(completionEvent(exchange, result, 'openrouter', prepared.endpoint));
+    onEvent(completionEvent(exchange, result, 'openrouter', 'chat/completions'));
     sendResult(exchange, result);
   }
   async function handleAnthropic(exchange: ProviderRequest) {
@@ -538,7 +546,11 @@ function requestIdentity(
   };
 }
 
-function prepareOpenRouterRequest(exchange: ProviderRequest, fallbackSession: string) {
+function prepareOpenRouterRequest(
+  exchange: ProviderRequest,
+  fallbackSession: string,
+  openrouter: NonNullable<GatewayOptions['openrouter']>,
+) {
   const { req, body, url, identity, agentId } = exchange;
   try {
     if (
@@ -559,7 +571,17 @@ function prepareOpenRouterRequest(exchange: ProviderRequest, fallbackSession: st
         ]),
       )
       .digest('hex');
-    return { ...openrouterRequest(body, cacheKey), cacheKey };
+    const id = catalogId(String(body.model ?? ''));
+    const model = openrouter.models.find((entry) => entry.id === id);
+    if (!model) {
+      throw new Error(
+        `Unknown OpenRouter model: ${id ?? body.model}. Run claude-openrouter models for the admitted catalog.`,
+      );
+    }
+    return {
+      ...openrouterRequest(body, model, { providerJson: openrouter.providerJson }),
+      cacheKey,
+    };
   } catch (error) {
     throw new BadRequest(reason(error));
   }

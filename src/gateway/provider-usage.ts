@@ -24,12 +24,12 @@ type ProviderUsageReader = (session: string) => Promise<{
   status?: ProviderUsageRow['status'];
 }>;
 const providers = [
-  { id: 'openrouter', name: 'OpenRouter', url: 'https://opencode.ai/openrouter' },
+  { id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/credits' },
 ] as const;
 const unavailable: Record<UsageProvider, string[]> = {
   openrouter: [
-    'Go subscription quota requires a supported OpenRouter API key.',
-    'Check the OpenRouter billing console for credits and charges.',
+    'Connect an OpenRouter API key to read the credit balance.',
+    'Top up or review spend at https://openrouter.ai/credits.',
   ],
 };
 

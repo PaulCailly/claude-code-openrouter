@@ -4,6 +4,13 @@ import path from 'node:path';
 
 export class OpenRouterAuthError extends Error {}
 
+export interface AuthPathOptions {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+  homedir?: string;
+}
+
+/** Printable ASCII with no spaces: anything else cannot be an API key header. */
 export function validateKey(value: string): string {
   if (!/^[\x21-\x7e]+$/.test(value)) {
     throw new OpenRouterAuthError('Invalid OpenRouter API key.');
@@ -19,30 +26,23 @@ function pathForPlatform(platform: NodeJS.Platform) {
   return platform === 'win32' ? path.win32 : path.posix;
 }
 
-export interface AuthPathOptions {
-  platform?: NodeJS.Platform;
-  env?: NodeJS.ProcessEnv;
-  homedir?: string;
-}
-
 export function authFile({
   platform = process.platform,
   env = process.env,
   homedir = os.homedir(),
 }: AuthPathOptions = {}): string {
-  const explicit = env.OPENCODE_AUTH_FILE;
-  if (explicit) {
-    return explicit;
+  if (env.OPENROUTER_AUTH_FILE) {
+    return env.OPENROUTER_AUTH_FILE;
   }
   const pathApi = pathForPlatform(platform);
-  const dataHome =
+  const base =
     platform === 'win32'
-      ? env.LOCALAPPDATA || pathApi.join(homedir, 'AppData', 'Local')
-      : env.XDG_DATA_HOME || pathApi.join(homedir, '.local', 'share');
-  return pathApi.join(dataHome, 'opencode', 'auth.json');
+      ? env.APPDATA || pathApi.join(homedir, 'AppData', 'Roaming')
+      : env.XDG_CONFIG_HOME || pathApi.join(homedir, '.config');
+  return pathApi.join(base, 'claude-code-openrouter', 'auth.json');
 }
 
-/** Read only the OpenRouter API key; credentials stay owned by OpenRouter. */
+/** The environment wins; otherwise the plugin's own store owns the key. */
 export async function readOpenRouterKey(
   options: AuthPathOptions = {},
 ): Promise<string | undefined> {
@@ -58,31 +58,31 @@ export async function readOpenRouterKey(
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return undefined;
     }
-    throw new OpenRouterAuthError('Cannot read OpenRouter auth.json.');
+    throw new OpenRouterAuthError('Cannot read the OpenRouter auth file.');
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new OpenRouterAuthError('OpenRouter auth.json is invalid.');
+    throw new OpenRouterAuthError('The OpenRouter auth file is invalid.');
   }
-  if (!isRecord(parsed) || parsed.opencode === undefined) {
+  if (!isRecord(parsed) || parsed.openrouter === undefined) {
     return undefined;
   }
-  const entry = parsed.opencode;
+  const entry = parsed.openrouter;
   if (
     !isRecord(entry) ||
     entry.type !== 'api' ||
     typeof entry.key !== 'string' ||
     !entry.key.trim()
   ) {
-    throw new OpenRouterAuthError('OpenRouter auth.json has invalid OpenRouter API credentials.');
+    throw new OpenRouterAuthError('The OpenRouter auth file has invalid credentials.');
   }
   return validateKey(entry.key);
 }
 
-/** Persist local key entry in OpenRouter's existing auth store, preserving other providers. */
+/** Written atomically with owner-only mode; unrelated entries are preserved. */
 export async function saveOpenRouterKey(key: string, options: AuthPathOptions = {}): Promise<void> {
   const validated = validateKey(key);
   const platform = options.platform ?? process.platform;
@@ -92,24 +92,24 @@ export async function saveOpenRouterKey(key: string, options: AuthPathOptions = 
   try {
     const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
     if (!isRecord(parsed)) {
-      throw new OpenRouterAuthError('OpenRouter auth.json is invalid.');
+      throw new OpenRouterAuthError('The OpenRouter auth file is invalid.');
     }
     entries = parsed;
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
       throw new OpenRouterAuthError(
-        'Cannot update OpenRouter auth.json. Existing credentials were preserved.',
+        'Cannot update the OpenRouter auth file. Existing credentials were preserved.',
       );
     }
   }
   await mkdir(pathApi.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = pathApi.join(
     pathApi.dirname(file),
-    `${pathApi.basename(file)}.multi-${process.pid}.tmp`,
+    `${pathApi.basename(file)}.${process.pid}.tmp`,
   );
   await writeFile(
     temporary,
-    `${JSON.stringify({ ...entries, opencode: { type: 'api', key: validated } }, null, 2)}\n`,
+    `${JSON.stringify({ ...entries, openrouter: { type: 'api', key: validated } }, null, 2)}\n`,
     { mode: 0o600, flag: 'wx' },
   );
   await rename(temporary, file);

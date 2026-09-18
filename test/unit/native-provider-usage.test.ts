@@ -40,7 +40,7 @@ test('provider dashboard isolates errors and explicitly reports disabled and uns
     ['error'],
   );
   assert(!JSON.stringify(result).includes('secret'));
-  assert(result.providers[0].details.some((line) => line.includes('billing console')));
+  assert(result.providers[0].details.some((line) => line.includes('openrouter.ai/credits')));
 });
 
 test('provider dashboard coalesces reads, caches account data, refreshes and keeps session counts fresh', async () => {

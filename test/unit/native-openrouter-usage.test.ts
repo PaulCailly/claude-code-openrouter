@@ -1,97 +1,92 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatOpenRouterQuota, readOpenRouterQuota } from '../../src/openrouter/usage.ts';
+import { formatCredits, readCredits } from '../../src/openrouter/usage.ts';
 
-const payload = {
-  usage: {
-    rolling: { status: 'ok', percent: 12, resetsAt: '2030-01-01T00:00:00.000Z' },
-    weekly: { status: 'ok', percent: 34, resetsAt: '2030-01-02T00:00:00.000Z' },
-    monthly: { status: 'rate-limited', percent: 100, resetsAt: '2030-02-01T00:00:00.000Z' },
-  },
-};
+const answer =
+  (body: unknown, status = 200) =>
+  async () =>
+    new Response(JSON.stringify(body), { status });
 
-test('OpenRouter Go quota sends the API key and parses provider windows', async () => {
-  let request: Request | undefined;
-  const result = await readOpenRouterQuota({
-    apiKey: 'test-key',
-    endpoint: 'https://example.test/usage',
-    fetch: async (input, init) => {
-      request = new Request(input, init);
-      return Response.json(payload);
-    },
+test('credits are read and the remainder computed', async () => {
+  const result = await readCredits({
+    apiKey: 'sk-or-v1-x',
+    fetch: answer({ data: { total_credits: 25, total_usage: 4.5 } }),
   });
-  assert.equal(result.status, 'available');
-  assert.equal(result.quota.monthly.percent, 100);
-  assert.equal(request?.headers.get('authorization'), 'Bearer test-key');
-  assert.equal(request?.redirect, 'error');
-  const view = formatOpenRouterQuota(result);
-  assert.equal(view.status, 'ready');
-  assert.match(view.summary, /weekly: 34% used/);
-  assert(view.details.some((line) => line.includes('limit reached')));
+  assert.deepEqual(result, {
+    status: 'available',
+    totalCredits: 25,
+    totalUsage: 4.5,
+    remaining: 20.5,
+  });
 });
 
-test('OpenRouter Go quota distinguishes missing key and missing entitlement', async () => {
-  assert.deepEqual(await readOpenRouterQuota({ apiKey: '' }), {
+test('a missing key is reported, not treated as an error', async () => {
+  assert.deepEqual(await readCredits({ apiKey: '', fetch: answer({}) }), {
     status: 'unavailable',
     reason: 'missing-key',
   });
-  const result = await readOpenRouterQuota({
-    apiKey: 'test-key',
-    fetch: async () => Response.json({ error: { type: 'EntitlementError' } }, { status: 403 }),
-  });
-  assert.deepEqual(result, { status: 'unavailable', reason: 'not-go-entitled' });
-  assert.equal(formatOpenRouterQuota(result).status, 'unavailable');
-  const forbidden = await readOpenRouterQuota({
-    apiKey: 'test-key',
-    fetch: async () => Response.json({ error: { type: 'AuthError' } }, { status: 403 }),
-  });
-  assert.deepEqual(forbidden, { status: 'unavailable', reason: 'unauthorized' });
-  assert.equal(formatOpenRouterQuota(forbidden).status, 'error');
 });
 
-test('OpenRouter quota rejects invalid credentials before fetch and malformed reset times', async () => {
-  await assert.rejects(
-    readOpenRouterQuota({
-      apiKey: 'bad\nkey',
+test('401 and 403 report unauthorized', async () => {
+  assert.deepEqual(await readCredits({ apiKey: 'sk-or-v1-x', fetch: answer({}, 401) }), {
+    status: 'unavailable',
+    reason: 'unauthorized',
+  });
+  assert.deepEqual(await readCredits({ apiKey: 'sk-or-v1-x', fetch: answer({}, 403) }), {
+    status: 'unavailable',
+    reason: 'unauthorized',
+  });
+});
+
+test('an unrecognised body reports malformed rather than throwing', async () => {
+  assert.deepEqual(
+    await readCredits({ apiKey: 'sk-or-v1-x', fetch: answer({ data: { nope: 1 } }) }),
+    { status: 'unavailable', reason: 'malformed' },
+  );
+});
+
+test('a network failure or upstream error degrades instead of throwing', async () => {
+  assert.deepEqual(
+    await readCredits({
+      apiKey: 'sk-or-v1-x',
       fetch: async () => {
-        throw new Error('must not fetch');
+        throw new Error('offline');
       },
     }),
-    /Invalid OpenRouter API key/,
+    { status: 'unavailable', reason: 'network' },
   );
-  const result = await readOpenRouterQuota({
-    apiKey: 'test-key',
-    fetch: async () =>
-      Response.json({
-        usage: {
-          ...payload.usage,
-          weekly: { ...payload.usage.weekly, resetsAt: 'unknown' },
-        },
-      }),
+  assert.deepEqual(await readCredits({ apiKey: 'sk-or-v1-x', fetch: answer({}, 503) }), {
+    status: 'unavailable',
+    reason: 'network',
   });
-  assert.deepEqual(result, { status: 'unavailable', reason: 'malformed' });
 });
 
-test('OpenRouter Go quota rejects malformed, unauthorized and timed out responses', async () => {
-  const malformed = await readOpenRouterQuota({
-    apiKey: 'key',
-    fetch: async () => Response.json({ usage: {} }),
+test('an invalid key never reaches the network', async () => {
+  let called = false;
+  const result = await readCredits({
+    apiKey: 'bad key',
+    fetch: async () => {
+      called = true;
+      return new Response('{}');
+    },
   });
-  assert.deepEqual(malformed, { status: 'unavailable', reason: 'malformed' });
-  const unauthorized = await readOpenRouterQuota({
-    apiKey: 'key',
-    fetch: async () => new Response('{}', { status: 401 }),
+  assert.equal(called, false);
+  assert.deepEqual(result, { status: 'unavailable', reason: 'unauthorized' });
+});
+
+test('the formatted view never claims a balance it does not have', () => {
+  assert.equal(formatCredits({ status: 'unavailable', reason: 'network' }).status, 'error');
+  assert.equal(
+    formatCredits({ status: 'unavailable', reason: 'missing-key' }).status,
+    'unavailable',
+  );
+  const ready = formatCredits({
+    status: 'available',
+    totalCredits: 25,
+    totalUsage: 4.5,
+    remaining: 20.5,
   });
-  assert.deepEqual(unauthorized, { status: 'unavailable', reason: 'unauthorized' });
-  const timeout = await readOpenRouterQuota({
-    apiKey: 'key',
-    timeoutMs: 1,
-    fetch: async (_input, init) =>
-      new Promise<Response>((_, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
-          once: true,
-        });
-      }),
-  });
-  assert.deepEqual(timeout, { status: 'unavailable', reason: 'network' });
+  assert.equal(ready.status, 'ready');
+  assert.match(ready.summary, /\$20\.50 of \$25\.00 remaining/);
+  assert(ready.details.some((line) => line.includes('openrouter.ai/credits')));
 });

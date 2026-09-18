@@ -26,7 +26,7 @@ test('parseCatalog admits only tool-capable models', () => {
   const ids = parseCatalog(fixture).map((model) => model.id);
   assert(!ids.includes('meta/no-tools-model'));
   assert(ids.includes('anthropic/claude-sonnet-4.5'));
-  assert.equal(ids.length, 5);
+  assert.equal(ids.length, 7);
 });
 
 test('parseCatalog reads capabilities from the payload, never from the id', () => {
@@ -89,9 +89,9 @@ test('loadCatalog fetches, reports the network source and writes the cache', asy
     fetch: async () => new Response(JSON.stringify(fixture), { status: 200 }),
   });
   assert.equal(load.source, 'network');
-  assert.equal(load.models.length, 5);
+  assert.equal(load.models.length, 7);
   const cached: unknown = JSON.parse(await readFile(catalogFile({ ...unix, homedir }), 'utf8'));
-  assert.equal(parseCatalog(cached).length, 5);
+  assert.equal(parseCatalog(cached).length, 7);
 });
 
 test('loadCatalog falls back to the cache when the network fails', async () => {
@@ -101,7 +101,7 @@ test('loadCatalog falls back to the cache when the network fails', async () => {
   await writeFile(file, JSON.stringify(fixture));
   const load = await loadCatalog({ ...unix, homedir, fetch: offline });
   assert.equal(load.source, 'cache');
-  assert.equal(load.models.length, 5);
+  assert.equal(load.models.length, 7);
 });
 
 test('loadCatalog fails explicitly with no network and no cache', async () => {
@@ -120,4 +120,29 @@ test('loadCatalog keeps a usable cache when upstream answers with an error statu
     fetch: async () => new Response('nope', { status: 503 }),
   });
   assert.equal(load.source, 'cache');
+});
+
+test('an explicit catalog file pins the catalog without touching the network', async () => {
+  const homedir = await home();
+  const file = path.join(homedir, 'pinned.json');
+  await writeFile(file, JSON.stringify(fixture));
+  const load = await loadCatalog({
+    platform: 'linux',
+    env: { OPENROUTER_CATALOG_FILE: file },
+    homedir,
+    fetch: async () => {
+      throw new Error('must not fetch');
+    },
+  });
+  assert.equal(load.source, 'cache');
+  assert.equal(load.models.length, 7);
+  await assert.rejects(
+    loadCatalog({
+      platform: 'linux',
+      env: { OPENROUTER_CATALOG_FILE: path.join(homedir, 'missing.json') },
+      homedir,
+      fetch: offline,
+    }),
+    /OPENROUTER_CATALOG_FILE/,
+  );
 });
