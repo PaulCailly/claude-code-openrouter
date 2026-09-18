@@ -32,7 +32,10 @@ test('a saved key round-trips and the file stays owner-only', async () => {
   await saveOpenRouterKey('sk-or-v1-abc', { ...unix, homedir });
   assert.equal(await readOpenRouterKey({ ...unix, homedir }), 'sk-or-v1-abc');
   const info = await stat(authFile({ ...unix, homedir }));
-  assert.equal(info.mode & 0o777, 0o600);
+  // Windows does not carry POSIX mode bits; NTFS inherits the user's ACL instead.
+  if (process.platform !== 'win32') {
+    assert.equal(info.mode & 0o777, 0o600);
+  }
 });
 
 test('saving twice replaces the key and keeps unrelated entries', async () => {
