@@ -84,7 +84,7 @@ function option(name: string): string | undefined {
   return index === -1 ? undefined : args[index + 1];
 }
 
-const model = option('--model') ?? 'gpt-5.6-luna';
+const model = option('--model') ?? 'anthropic/claude-sonnet-5';
 const switchedModel = option('--switch');
 const compaction = args.includes('--compaction');
 const cancellation = args.includes('--cancel');
@@ -221,19 +221,16 @@ function createGateway() {
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     const headers = init.headers;
     assert(
-      headers['x-opencode-session'],
+      headers['x-openrouter-session'],
       'OpenRouter request is missing its sticky session header',
     );
-    const promptCacheKey = typeof body.prompt_cache_key === 'string' ? body.prompt_cache_key : '';
-    if (body.input !== undefined) {
-      assert(promptCacheKey, 'OpenRouter Responses request is missing its prompt cache key');
-      assert.equal(promptCacheKey, headers['x-opencode-session']);
-    }
+    assert.deepEqual(body.usage, { include: true }, 'OpenRouter request must ask for usage');
+    const promptCacheKey = headers['x-openrouter-session'] ?? '';
     const sample: UsageSample = {
       stage: currentStage,
       model: typeof body.model === 'string' ? body.model : '',
-      stickySession: headers['x-opencode-session'] ?? '',
-      cacheKey: promptCacheKey || headers['x-opencode-session'] || '',
+      stickySession: headers['x-openrouter-session'] ?? '',
+      cacheKey: promptCacheKey || headers['x-openrouter-session'] || '',
       instructionsHash: hash(instructions(body)),
       toolsHash: hash(body.tools),
       inputTypes: inputTypes(body),
@@ -245,7 +242,7 @@ function createGateway() {
       retryAfter: null,
     };
     samples.push(sample);
-    assert.equal(new URL(url).origin, 'https://opencode.ai');
+    assert.equal(new URL(url).origin, 'https://openrouter.ai');
     const response = await fetch(url, init);
     sample.status = response.status;
     sample.retryAfter = response.headers.get('retry-after');
