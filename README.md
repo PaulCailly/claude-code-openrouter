@@ -1,113 +1,129 @@
-![multi-cli — plugin for claude code](docs/assets/banner.svg)
+# claude-code-openrouter
 
-# cc-multi-cli-plugin
+**Any OpenRouter model, inside one Claude Code session, running Claude's own tools.**
 
-**One Claude Code session. Your models. Their native tools.**
-
-[![CI](https://github.com/greenpolo/cc-multi-cli-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/greenpolo/cc-multi-cli-plugin/actions/workflows/ci.yml)
+[![CI](https://github.com/PaulCailly/claude-code-openrouter/actions/workflows/ci.yml/badge.svg)](https://github.com/PaulCailly/claude-code-openrouter/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Latest release](https://img.shields.io/github/v/release/greenpolo/cc-multi-cli-plugin?include_prereleases&sort=semver&label=release)](https://github.com/greenpolo/cc-multi-cli-plugin/releases)
 [![Built for Claude Code](https://img.shields.io/badge/built_for-Claude_Code-d97757)](https://docs.anthropic.com/en/docs/claude-code)
 [![Node 24.12+](https://img.shields.io/badge/Node-%E2%89%A524.12-555)](#install)
-[![Linux · macOS · Windows](https://img.shields.io/badge/platforms-Linux_%C2%B7_macOS_%C2%B7_Windows-555)](docs/platform-support.md)
-[![Stars](https://img.shields.io/github/stars/greenpolo/cc-multi-cli-plugin?style=social)](https://github.com/greenpolo/cc-multi-cli-plugin/stargazers)
 
-Multi brings external models and coding harnesses into one Claude Code session through the `/model` picker and named native workers, with each provider's own login and permissions. Providers are OpenAI (ChatGPT via Codex login), Cursor (official SDK), OpenCode Zen (API key), and Antigravity (official CLI).
+Pick an OpenRouter model in `/model` and keep everything else: Claude Code reads,
+edits, greps and runs your tools, applies its own permission mode, and keeps the
+conversation. The model is the only thing that changes.
 
-[Quick start](#install) · [Providers](#providers) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+This is an unofficial community plugin, affiliated with neither Anthropic nor
+OpenRouter.
 
-![Claude Code: Fable 5.1 coordinating GPT-5.6 Luna, Grok 4.6, and Gemini 3.8 Flash workers](docs/assets/multi-provider-workers.svg)
-
-*Fable 5.1 coordinating GPT-5.6 Luna, Grok 4.6, and Gemini 3.8 Flash in one Claude Code session.*
-
-## Why Multi?
-
-- **Choose your model in place.** Switch through `/model` and select supported reasoning effort with `/effort`.
-- **Delegate to named workers.** Run provider-specific subagents with progress, elapsed time, and cancellation.
-- **Keep native execution.** OpenAI and Zen use Claude Code's tools; Cursor and Antigravity run their own SDK or CLI tools.
-- **Carry your session forward.** Resume saved sessions while keeping provider credentials and native state separate.
-- **Stay in control.** Claude's permission mode and explicit tool restrictions govern provider dispatch.
+[Install](#install) · [Use](#use) · [Models](#models) · [Credits](#credits) · [How it works](#how-it-works) · [Provenance](#provenance)
 
 ## Install
 
-In Claude Code, add the marketplace and install the providers you want:
+In Claude Code:
 
 ```text
-/plugin marketplace add greenpolo/cc-multi-cli-plugin
-/plugin install multi-openai@cc-multi-cli-plugin
-/plugin install multi-cursor@cc-multi-cli-plugin
-/plugin install multi-zen@cc-multi-cli-plugin
-/plugin install multi-antigravity@cc-multi-cli-plugin
+/plugin marketplace add PaulCailly/claude-code-openrouter
+/plugin install openrouter@claude-code-openrouter
 /reload-plugins
-/multi-core:setup
 ```
 
-Install any subset; each provider pulls in the shared `multi-core` plugin. Open a new terminal, run `claude-multi`, and connect the providers you installed:
+Then, in a terminal (Node 24.12 or newer):
 
-### Providers
+```sh
+npm install -g claude-code-openrouter
+claude-openrouter connect
+claude-openrouter
+```
 
-| Plugin | Command | What it gives you |
-| --- | --- | --- |
-| `multi-openai` | `/multi-openai:login` | [ChatGPT models through Codex](docs/openai.md) |
-| `multi-cursor` | `/multi-cursor:login` | [Official Cursor SDK models and workers](docs/cursor.md) |
-| `multi-zen` | `/multi-zen:connect` | [OpenCode Zen models with an API key](docs/zen.md) |
-| `multi-antigravity` | `/multi-antigravity:connect` | [Antigravity models and workers through `agy`](docs/antigravity.md) |
-
-`multi status` shows what is installed and connected. `multi uninstall` removes the shell integration and keeps provider logins. Plain `claude` is never changed. Rename the launch command or trim the `/model` rows with `/multi-core:setup --command <name> --models <ids>`. Details: [installation](docs/installation.md).
-
-<details>
-<summary>Installing with a coding agent</summary>
-
-Paste this into any coding agent:
-
-> Install cc-multi-cli-plugin by following https://github.com/greenpolo/cc-multi-cli-plugin/blob/main/docs/installation.md#for-agents. Ask which providers I want, what to name the launch command (default `claude-multi`), and which models to show in `/model` (default all). Hand browser logins and API-key entry to me, and never ask for credentials in chat.
-
-</details>
+`connect` prompts for an [OpenRouter API key](https://openrouter.ai/keys)
+privately and stores it with mode 0600 under your config directory. Launch with
+`claude-openrouter`; plain `claude` is never modified and no shell configuration
+is written.
 
 ## Use
 
-Launch with `claude-multi`. `/model` lists the external models next to Claude's; `/effort` sets effort where the model supports it. Named workers run as subagents with live progress, elapsed time and cancellation. Claude's permission mode governs every provider; see [permissions](docs/permissions.md). Resume a saved session with `claude-multi --resume <session-id>`.
+`/model` lists the OpenRouter rows next to Claude's own. `/effort` sets reasoning
+effort on models that advertise it. Each visible row also gets a named worker —
+`openrouter-anthropic-claude-sonnet-5`, and `-low` / `-medium` / `-high` variants
+for reasoning models — that runs as a subagent with progress and cancellation.
 
-Use `/multi-usage` to open a provider usage menu with quotas, billed spend where
-available, session tokens, and worker receipts. Set `MULTI_RECEIPTS_FILE` before
-launching to append JSONL receipts. See [usage and receipts](docs/usage.md).
+Claude's permission mode governs every OpenRouter run, because Claude Code is
+what executes the tools. See [permissions](docs/permissions.md).
+
+Resume a saved session with `claude-openrouter --resume <session-id>`.
+
+## Models
+
+The catalog is fetched from OpenRouter at launch and cached on disk, so context
+length, output limits, image support, effort support and prices are never stale.
+Only models that advertise tool calling are admitted — a model that cannot call
+tools cannot drive a Claude Code session.
+
+`/model` shows a short recommended list. Choose your own rows with
+`OPENROUTER_MODELS`:
+
+```sh
+OPENROUTER_MODELS=anthropic/claude-sonnet-5,z-ai/glm-5.3 claude-openrouter
+```
+
+An empty value hides the OpenRouter rows. Any admitted id stays selectable by
+typing it. `claude-openrouter models` prints the full admitted catalog. More in
+[docs/openrouter.md](docs/openrouter.md).
+
+## Credits
+
+`/openrouter-usage` shows your OpenRouter credit balance, this session's tokens
+and billed cost as OpenRouter reports it, and per-worker receipts. Set
+`OPENROUTER_RECEIPTS_FILE` before launching to append JSONL receipts. See
+[usage and receipts](docs/usage.md).
+
+## How it works
+
+The launcher starts a loopback gateway and runs the real `claude` against it.
+Requests for `openrouter/...` models are translated into OpenRouter chat
+completions and streamed back in Anthropic's shape; every other request is
+forwarded to Anthropic untouched. Claude Mods supply the in-session control plane
+for model rows, worker rows, permissions and compaction.
+
+```text
+Claude Code session (/model, workers, prompts)
+                  |
+        Claude Mods control plane
+                  |
+             Node gateway
+            /            \
+    Anthropic          OpenRouter
+   passthrough      chat completions
+```
+
+Details in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Platforms
 
-Linux, macOS, and Windows are supported, with offline checks running in CI on all three for every commit. WSL behaves as Linux. See [platform support](docs/platform-support.md) for the live-verified matrix per provider.
+Linux, macOS and Windows; CI runs the offline checks on all three. See
+[platform support](docs/platform-support.md).
 
 ## Documentation
 
 | Start here | Learn more |
 | --- | --- |
-| [Installation and account setup](docs/installation.md) | [Permissions and review](docs/permissions.md) |
-| [OpenAI](docs/openai.md) · [Cursor](docs/cursor.md) | [Architecture and execution flow](ARCHITECTURE.md) |
-| [OpenCode Zen](docs/zen.md) · [Antigravity](docs/antigravity.md) | [Platform support and verification](docs/platform-support.md) |
+| [Installation](docs/installation.md) | [Permissions](docs/permissions.md) |
+| [OpenRouter models and limits](docs/openrouter.md) | [Architecture](ARCHITECTURE.md) |
+| [Usage and receipts](docs/usage.md) | [Platform support](docs/platform-support.md) |
 
-<details>
-<summary>Does this change my normal Claude setup?</summary>
+## Provenance
 
-No. Launch Multi with `claude-multi`; plain `claude` stays unchanged. Provider plugins are opt-in, and each provider uses its own authentication. `multi uninstall` removes the shell integration while preserving provider logins.
-
-</details>
-
-<details>
-<summary>Where do tools run?</summary>
-
-OpenAI and Zen use Claude Code's tool execution loop. Cursor uses its official SDK, and Antigravity uses the real `agy` CLI. Native harness actions are displayed in the session and are never replayed as executable Claude tool calls. See [architecture](ARCHITECTURE.md) and [permissions](docs/permissions.md) for the boundaries.
-
-</details>
+This project derives from
+[cc-multi-cli-plugin](https://github.com/greenpolo/cc-multi-cli-plugin) by
+greenpolo, Apache 2.0, at commit `3dc5066`. Its gateway, mods control plane,
+permission handling and chat translator are the foundation here; its four
+provider integrations were removed and the remaining path was rewritten for
+OpenRouter. See [NOTICE](NOTICE).
 
 ## Contributing
 
-Bug reports, provider improvements, and documentation fixes are welcome. Read the
-[contributing guide](CONTRIBUTING.md) for local setup and checks, or open a
-[bug report](https://github.com/greenpolo/cc-multi-cli-plugin/issues/new?template=bug_report.yml) or
-[feature request](https://github.com/greenpolo/cc-multi-cli-plugin/issues/new?template=feature_request.yml).
-
-CI runs the repository checks on Linux, macOS, and Windows. See the
-[workflow results](https://github.com/greenpolo/cc-multi-cli-plugin/actions/workflows/ci.yml).
+Bug reports and improvements are welcome; see the
+[contributing guide](CONTRIBUTING.md).
 
 ## License
 
-Apache 2.0. See [NOTICE](NOTICE) for upstream credits.
+Apache 2.0.

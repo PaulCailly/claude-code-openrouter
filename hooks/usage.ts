@@ -35,9 +35,9 @@ export const register: Register = (on) => {
       additionalContext: [...(result.additionalContext ?? []), quotaAdvice(snapshot)],
     };
   });
-  on('command.run', { command: 'multi-usage' }, async ($, event) => {
+  on('command.run', { command: 'openrouter-usage' }, async ($, event) => {
     if (event.args.trim()) {
-      return { text: 'Use /multi-usage without arguments.' };
+      return { text: 'Use /openrouter-usage without arguments.' };
     }
     const session = await $.session.id();
     const response = dashboard(
@@ -47,7 +47,9 @@ export const register: Register = (on) => {
       ),
     );
     if (!response) {
-      return { text: 'Multi usage is unavailable. Launch this session with claude-multi.' };
+      return {
+        text: 'OpenRouter usage is unavailable. Launch this session with claude-openrouter.',
+      };
     }
     if (panes.size >= 16) {
       panes.clear();
@@ -55,8 +57,8 @@ export const register: Register = (on) => {
     panes.set(session, { ...response, quotaAdviceEnabled: advisorySessions.has(session) });
     try {
       await $.ui.open({
-        id: 'multi-usage',
-        title: 'Multi usage',
+        id: 'openrouter-usage',
+        title: 'OpenRouter usage',
         focus: true,
         closeOnEscape: true,
         rows: 20,
@@ -72,7 +74,7 @@ export const register: Register = (on) => {
     }
   });
   on('ui.render', { component: 'Pane' }, async ($, event, next) => {
-    if (event.requestId !== 'multi-usage' || event.surface !== 'terminal') {
+    if (event.requestId !== 'openrouter-usage' || event.surface !== 'terminal') {
       return next(event);
     }
     const props = panes.get(await $.session.id());
@@ -83,7 +85,11 @@ export const register: Register = (on) => {
     return Client({ key: 'usage', module: './usage-view.ts', props, width: '100%', flexGrow: 1 });
   });
   on('ui.message', { source: 'client' }, async ($, event, next) => {
-    if (event.requestId !== 'multi-usage' || event.element !== 'usage' || !record(event.data)) {
+    if (
+      event.requestId !== 'openrouter-usage' ||
+      event.element !== 'usage' ||
+      !record(event.data)
+    ) {
       return next(event);
     }
     const action = event.data.action;

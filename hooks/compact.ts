@@ -23,7 +23,7 @@ export const register: Register = (on) => {
       `/openrouter/mod/mode?sessionId=${encodeURIComponent(sessionId)}`,
     );
     if (mode?.generation === undefined) {
-      return { skip: 'Multi compaction policy generation is unavailable.' };
+      return { skip: 'OpenRouter compaction policy generation is unavailable.' };
     }
     const payload = {
       sessionId,
@@ -35,7 +35,7 @@ export const register: Register = (on) => {
     };
     if (event.trigger === 'precompute') {
       await precompute($, payload);
-      return { skip: 'Multi summary preparation runs outside the hook budget.' };
+      return { skip: 'claude-code-openrouter summary preparation runs outside the hook budget.' };
     }
     const result = await request($, payload, '/openrouter/mod/compact/authorize');
     if (result?.messages) {
@@ -55,7 +55,7 @@ export const register: Register = (on) => {
       '/openrouter/mod/compact/authorize',
     );
     if (!fallback?.allow) {
-      return { skip: 'Multi tool-free compaction authorization was not acknowledged.' };
+      return { skip: 'OpenRouter tool-free compaction authorization was not acknowledged.' };
     }
     return next(event);
   });

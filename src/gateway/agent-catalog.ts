@@ -9,7 +9,7 @@ interface Worker {
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Registration is unchanged: only exact Multi-owned announcement rows are hidden. */
+/** Registration is unchanged: only exact claude-code-openrouter-owned announcement rows are hidden. */
 export class AgentCatalog {
   private hidden = new Set<string>();
 

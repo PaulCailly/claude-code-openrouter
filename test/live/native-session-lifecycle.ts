@@ -88,7 +88,7 @@ async function launch(session?: string) {
     ],
     { cwd: root, env, timeout: 30000 },
   );
-  assert.doesNotMatch(stdout + stderr, /DEP0190|Multi permission sync failed/);
+  assert.doesNotMatch(stdout + stderr, /DEP0190|OpenRouter permission sync failed/);
   const result = JSON.parse(stdout);
   assert.equal(result.is_error, false);
   assert.equal(result.result, 'RESUME_OK');
@@ -123,7 +123,7 @@ assert(
 for (const option of ['--bg', '--background', 'attach', 'respawn']) {
   await assert.rejects(
     run(process.execPath, [launcher, '--', option], { cwd: root, env, timeout: 30000 }),
-    /Multi sessions must stay attached/,
+    /claude-code-openrouter sessions must stay attached/,
   );
 }
 console.log(

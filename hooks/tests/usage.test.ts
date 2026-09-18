@@ -34,13 +34,13 @@ test('usage command reads only the current session without model dispatch', asyn
       },
     };
   });
-  const result = await $.command.run({ command: 'multi-usage', args: '' });
+  const result = await $.command.run({ command: 'openrouter-usage', args: '' });
   expect(result.text).toBeUndefined();
   const rendered = await $.ui.render({
     surface: 'terminal',
     component: 'Pane',
-    requestId: 'multi-usage',
-    props: { title: 'Multi usage', isFocused: true, bodyColumns: 80 },
+    requestId: 'openrouter-usage',
+    props: { title: 'OpenRouter usage', isFocused: true, bodyColumns: 80 },
   });
   expect(JSON.stringify(rendered)).toContain('usage-view.ts');
   expect(JSON.stringify(rendered)).toContain('OpenRouter');
@@ -83,7 +83,7 @@ test('worker completion awaits accounting and preserves the engine answer', asyn
 test('usage without a gateway reports unavailable without opening a pane', async ($, on) => {
   mock.env(on, {});
   on('session.id', () => ({ value: 'session' }));
-  const result = await $.command.run({ command: 'multi-usage', args: '' });
+  const result = await $.command.run({ command: 'openrouter-usage', args: '' });
   expect(result.text).toContain('unavailable');
 });
 

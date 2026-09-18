@@ -15,7 +15,7 @@ test('compaction with an unknown generation skips without calling core', async (
     return { skip: 'core' };
   });
   const result = await $.session.compact({});
-  expect(result.skip).toBe('Multi compaction policy generation is unavailable.');
+  expect(result.skip).toBe('OpenRouter compaction policy generation is unavailable.');
   expect(core).toBe(false);
 });
 
@@ -47,7 +47,7 @@ test('failed fallback authorization skips instead of running core with ordinary 
     return { skip: 'core' };
   });
   const result = await $.session.compact({});
-  expect(result.skip).toBe('Multi tool-free compaction authorization was not acknowledged.');
+  expect(result.skip).toBe('OpenRouter tool-free compaction authorization was not acknowledged.');
   expect(core).toBe(false);
 });
 

@@ -53,7 +53,7 @@ export const register: Register = (on) => {
       cwd: event.cwd,
     });
     if (!response?.accepted) {
-      return { block: response?.error ?? 'Multi worker start was not acknowledged.' };
+      return { block: response?.error ?? 'OpenRouter worker start was not acknowledged.' };
     }
     return next(event);
   });
@@ -79,7 +79,7 @@ export const register: Register = (on) => {
       background: event.background,
     });
     if (!snapshot?.accepted) {
-      return { deny: snapshot?.error ?? 'Multi worker policy was not acknowledged.' };
+      return { deny: snapshot?.error ?? 'OpenRouter worker policy was not acknowledged.' };
     }
     // The child-start hook correlates its engine ID before the first native request.
     return next(event);

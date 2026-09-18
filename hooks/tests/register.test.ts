@@ -27,7 +27,7 @@ test('registers display tools and posts a session snapshot', async ($, on) => {
   });
   await $.session.start({ cwd: '/tmp', model: 'openrouter/glm-5.3' });
   expect(requests).toContain('http://127.0.0.1:4000/openrouter/mod/session');
-  expect(commands).toEqual(['multi-usage']);
+  expect(commands).toEqual(['openrouter-usage']);
 });
 
 test('mod is dormant without launcher environment', async ($, on) => {

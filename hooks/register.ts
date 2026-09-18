@@ -47,7 +47,7 @@ export const register: Register = (on, options) => {
       return next(event);
     }
     await $.command.register({
-      name: 'multi-usage',
+      name: 'openrouter-usage',
       description: 'Open provider quotas, spend, and session receipts.',
       immediate: true,
     });
@@ -66,7 +66,7 @@ export const register: Register = (on, options) => {
     }
     const prepared = await preparePolicy($, event.session_id, event.cwd, generation);
     if (!prepared) {
-      return { block: 'Multi policy is not ready; submit the prompt again.' };
+      return { block: 'OpenRouter policy is not ready; submit the prompt again.' };
     }
     generation = prepared.generation;
     const response = await request($, '/openrouter/mod/session', {
@@ -82,8 +82,8 @@ export const register: Register = (on, options) => {
       const reason = response?.error;
       return {
         block: reason
-          ? `Multi permission snapshot was not acknowledged: ${reason}`
-          : 'Multi permission snapshot was not acknowledged; native execution is unavailable.',
+          ? `OpenRouter permission snapshot was not acknowledged: ${reason}`
+          : 'OpenRouter permission snapshot was not acknowledged; native execution is unavailable.',
       };
     }
     generation = typeof response.generation === 'number' ? response.generation : undefined;

@@ -106,7 +106,12 @@ test('discovers scoped plugin workers, manifest replacement paths and inherited 
     '---\nname: reader\ndescription: reader\ntools: Read, Grep\npermissionMode: bypassPermissions\n---\n',
   );
   inventory = [
-    { id: 'openrouter@cc-multi-cli-plugin', enabled: true, installPath: root, projectPath: root },
+    {
+      id: 'openrouter@claude-code-openrouter',
+      enabled: true,
+      installPath: root,
+      projectPath: root,
+    },
     { id: 'fixture@inline', enabled: true, installPath: root, projectPath: root },
     { id: 'disabled@test', enabled: false, installPath: '/does-not-exist' },
     {
