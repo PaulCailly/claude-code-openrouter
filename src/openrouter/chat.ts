@@ -651,15 +651,7 @@ class ChatAccumulator {
     }
     const item = delta(choice.delta);
     if (this.ended) {
-      // OpenRouter repeats the finished choice on its trailing usage chunk. That
-      // echo carries no new content; anything else after completion is a fault.
-      if (item.content || item.reasoning_content || item.tool_calls?.length) {
-        throw new Error('OpenRouter Chat emitted data after completion');
-      }
-      const repeated = finishReason(choice.finish_reason);
-      if (repeated !== undefined && repeated !== this.stop) {
-        throw new Error('OpenRouter Chat changed finish reason');
-      }
+      this.acceptEcho(item, choice.finish_reason);
       return;
     }
     this.addReasoning(item.reasoning_content);
@@ -674,6 +666,21 @@ class ChatAccumulator {
         this.stop = stop;
       }
       this.ended = true;
+    }
+  }
+
+  /**
+   * OpenRouter repeats the finished choice on the chunk that carries usage. That
+   * echo adds nothing; anything else after completion is a fault.
+   */
+  private acceptEcho(item: ChatDelta, reason: unknown) {
+    const calls = Array.isArray(item.tool_calls) ? item.tool_calls.length : 0;
+    if (item.content || item.reasoning_content || calls > 0) {
+      throw new Error('OpenRouter Chat emitted data after completion');
+    }
+    const repeated = finishReason(reason);
+    if (repeated !== undefined && repeated !== this.stop) {
+      throw new Error('OpenRouter Chat changed finish reason');
     }
   }
 

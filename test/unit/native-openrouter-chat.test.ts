@@ -538,8 +538,6 @@ test('the trailing usage chunk may repeat the finished choice, as OpenRouter sen
       },
     ]),
     model,
-    undefined,
-    { requireUsage: true },
   );
   assert.equal(result.stop_reason, 'end_turn');
   assert.deepEqual(result.content, [{ type: 'text', text: 'Hi there' }]);
@@ -555,8 +553,6 @@ test('real content after completion is still refused', async () => {
         { id: 'gen-2', choices: [{ index: 0, delta: { content: ' more' } }] },
       ]),
       model,
-      undefined,
-      { requireUsage: false },
     ),
     /after completion/,
   );
