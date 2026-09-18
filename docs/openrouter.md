@@ -76,6 +76,15 @@ survives restarts and is sent as `x-openrouter-session`. Visible conversation
 history transfers when switching models; reasoning signatures stay with the model
 that produced them. Compaction or a model switch can make the next request cold.
 
+## Prompt caching
+
+OpenRouter does not cache implicitly. Anthropic models need explicit
+`cache_control` breakpoints and this plugin does not send them yet, so a resumed
+conversation re-sends its prefix at full price. Translated instructions, tool
+ordering and history are byte-stable, so the work needed is the breakpoints
+themselves. Models that cache automatically upstream still report their own cache
+counters.
+
 ## Limits
 
 The gateway rejects unknown models, unsupported effort values, unsupported media

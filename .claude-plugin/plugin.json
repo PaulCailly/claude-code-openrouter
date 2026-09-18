@@ -6,7 +6,5 @@
     "name": "Paul Cailly",
     "url": "https://github.com/PaulCailly"
   },
-  "license": "Apache-2.0",
-  "skills": "./skills",
-  "hooks": "./hooks/hooks.json"
+  "license": "Apache-2.0"
 }

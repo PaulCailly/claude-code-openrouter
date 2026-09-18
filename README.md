@@ -72,7 +72,9 @@ typing it. `claude-openrouter models` prints the full admitted catalog. More in
 ## Credits
 
 `/openrouter-usage` shows your OpenRouter credit balance, this session's tokens
-and billed cost as OpenRouter reports it, and per-worker receipts. Set
+and billed cost as OpenRouter reports it, and per-worker receipts. Claude's own
+`/cost` line prices OpenRouter rows with a Claude profile and is not your
+OpenRouter spend; see [usage and receipts](docs/usage.md). Set
 `OPENROUTER_RECEIPTS_FILE` before launching to append JSONL receipts. See
 [usage and receipts](docs/usage.md).
 

@@ -12,6 +12,14 @@ A failing credits call degrades to "balance unavailable" and never blocks a run.
 The balance is account-wide, not session-scoped: review spend at
 https://openrouter.ai/credits.
 
+## Claude's own cost line is not your OpenRouter spend
+
+Claude Code prices every row with one of its own model profiles, because that is
+what `behavesAs` selects for the effort UI. Its `/cost` line therefore reports
+what the turn *would* have cost on that Claude model, not what OpenRouter
+charged. Use `/openrouter-usage` for real spend, and OpenRouter's own dashboard
+as the final word.
+
 ## Token counts
 
 Every request sets `usage: { include: true }`, so input, output, cache-read and
