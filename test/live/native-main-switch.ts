@@ -27,9 +27,7 @@ interface Waiter {
 const cwd = await mkdtemp(path.join(tmpdir(), 'native-main-switch-'));
 const nonce = randomBytes(8).toString('hex');
 await writeFile(path.join(cwd, 'fixture.txt'), `alpha ${nonce}\n`);
-const launcher = fileURLToPath(
-  new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-);
+const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
 const child = spawn(
   process.execPath,
   [
@@ -57,7 +55,7 @@ const child = spawn(
     cwd,
     detached: true,
     env: isolatedEnvironment({
-      MULTI_NATIVE_TRACE: '1',
+      OPENROUTER_NATIVE_TRACE: '1',
       CLAUDE_CODE_MAX_RETRIES: '0',
     }),
     stdio: ['pipe', 'pipe', 'pipe'],

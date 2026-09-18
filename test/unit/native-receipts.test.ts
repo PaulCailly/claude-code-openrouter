@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ReceiptLedger } from '../../plugins/multi-core/src/gateway/receipts.ts';
-import type { GatewayEvent } from '../../plugins/multi-core/src/gateway/server.ts';
+import { ReceiptLedger } from '../../src/gateway/receipts.ts';
+import type { GatewayEvent } from '../../src/gateway/server.ts';
 
 const completion: GatewayEvent = {
-  route: 'openai',
+  route: 'openrouter',
   endpoint: 'responses',
   session: 'session-1',
   agentId: 'worker-7',
@@ -27,9 +27,9 @@ test('ledger aggregates an invocation and ignores replayed usage', async () => {
   ledger.observe({
     ...completion,
     invocationId: 'turn-1',
-    route: 'zen',
+    route: 'openrouter',
     endpoint: 'chat/completions',
-    model: 'zen-model',
+    model: 'openrouter-model',
     effort: 'low',
     usage: { input_tokens: 2, output_tokens: 3 },
     usageMetadata: { source: 'provider', replayed: true },

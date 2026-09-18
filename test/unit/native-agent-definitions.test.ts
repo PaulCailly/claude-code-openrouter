@@ -4,11 +4,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test, { mock } from 'node:test';
-import {
-  loadWorkerPermissions,
-  pluginPermissions,
-} from '../../plugins/multi-core/src/gateway/agent-definitions.ts';
-import { cursorPermissionPolicy } from '../../plugins/multi-cursor/src/permissions.ts';
+import { loadWorkerPermissions, pluginPermissions } from '../../src/gateway/agent-definitions.ts';
 
 async function writeAgent(directory: string, name: string, source: string) {
   const agents = path.join(directory, '.claude', 'agents');
@@ -110,7 +106,12 @@ test('discovers scoped plugin workers, manifest replacement paths and inherited 
     '---\nname: reader\ndescription: reader\ntools: Read, Grep\npermissionMode: bypassPermissions\n---\n',
   );
   inventory = [
-    { id: 'multi-core@cc-multi-cli-plugin', enabled: true, installPath: root, projectPath: root },
+    {
+      id: 'openrouter@claude-code-openrouter',
+      enabled: true,
+      installPath: root,
+      projectPath: root,
+    },
     { id: 'fixture@inline', enabled: true, installPath: root, projectPath: root },
     { id: 'disabled@test', enabled: false, installPath: '/does-not-exist' },
     {
@@ -161,7 +162,4 @@ test('worker hooks do not restrict the native worker', async () => {
   assert.equal(definitions.ordinary.nativePermissionError, undefined);
   assert.deepEqual(definitions.ordinary.tools, ['Read']);
   assert.equal(definitions['general-purpose'].nativePermissionError, undefined);
-  for (const definition of [definitions.guarded, definitions.ordinary]) {
-    assert.doesNotThrow(() => cursorPermissionPolicy({ ...definition, permissionMode: 'auto' }));
-  }
 });

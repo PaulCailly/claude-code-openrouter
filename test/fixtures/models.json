@@ -1,0 +1,180 @@
+{
+  "data": [
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "name": "Anthropic: Claude Sonnet 5",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text+image->text",
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "tokenizer": "Claude"
+      },
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001"
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 64000
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "reasoning",
+        "stop",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ]
+    },
+    {
+      "id": "z-ai/glm-5.3",
+      "name": "Z-AI: GLM 5.3",
+      "context_length": 1310720,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "pricing": {
+        "prompt": "0.0000014",
+        "completion": "0.0000028"
+      },
+      "top_provider": {
+        "context_length": 1310720,
+        "max_completion_tokens": 128000
+      },
+      "supported_parameters": ["max_tokens", "reasoning", "tool_choice", "tools"]
+    },
+    {
+      "id": "anthropic/claude-sonnet-4.5",
+      "name": "Anthropic: Claude Sonnet 4.5",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text+image+file->text",
+        "input_modalities": ["text", "image", "file"],
+        "output_modalities": ["text"],
+        "tokenizer": "Claude"
+      },
+      "pricing": {
+        "prompt": "0.000003",
+        "completion": "0.000015"
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 64000
+      },
+      "supported_parameters": [
+        "max_tokens",
+        "reasoning",
+        "stop",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ]
+    },
+    {
+      "id": "x/plain-tools",
+      "name": "X: Plain Tools",
+      "context_length": 128000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "GPT"
+      },
+      "pricing": {
+        "prompt": "0.0000005",
+        "completion": "0.0000015"
+      },
+      "top_provider": {
+        "context_length": 128000,
+        "max_completion_tokens": 16384
+      },
+      "supported_parameters": ["max_tokens", "stop", "temperature", "tool_choice", "tools"]
+    },
+    {
+      "id": "x/no-max-model",
+      "name": "X: No Max",
+      "context_length": 32768,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "pricing": {
+        "prompt": "0.000001",
+        "completion": "0.000002"
+      },
+      "top_provider": {
+        "context_length": 32768,
+        "max_completion_tokens": null
+      },
+      "supported_parameters": ["max_tokens", "reasoning", "tool_choice", "tools"]
+    },
+    {
+      "id": "meta/no-tools-model",
+      "name": "Meta: No Tools",
+      "context_length": 8192,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "Llama3"
+      },
+      "pricing": {
+        "prompt": "0.0000002",
+        "completion": "0.0000002"
+      },
+      "top_provider": {
+        "context_length": 8192,
+        "max_completion_tokens": 4096
+      },
+      "supported_parameters": ["max_tokens", "stop", "temperature"]
+    },
+    {
+      "id": "vendor/generous-model:free",
+      "name": "Vendor: Generous (free)",
+      "context_length": 65536,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "top_provider": {
+        "context_length": 65536,
+        "max_completion_tokens": 8192
+      },
+      "supported_parameters": ["max_tokens", "tool_choice", "tools"]
+    },
+    {
+      "id": "vendor/odd-pricing",
+      "name": "Vendor: Odd Pricing",
+      "context_length": 16384,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other"
+      },
+      "pricing": {
+        "prompt": "unknown",
+        "completion": null
+      },
+      "top_provider": {
+        "context_length": 16384,
+        "max_completion_tokens": 4096
+      },
+      "supported_parameters": ["max_tokens", "tools"]
+    }
+  ]
+}

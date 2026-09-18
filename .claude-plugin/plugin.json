@@ -1,12 +1,12 @@
 {
-  "version": "0.2.0",
+  "name": "openrouter",
+  "version": "0.1.0",
+  "description": "OpenRouter models inside one Claude Code session, with Claude's own tools and permissions.",
   "author": {
-    "name": "greenpolo",
-    "url": "https://github.com/greenpolo"
+    "name": "Paul Cailly",
+    "url": "https://github.com/PaulCailly"
   },
   "license": "Apache-2.0",
-  "name": "multi-core",
-  "description": "Shared Multi gateway, setup, status and reversible Claude startup integration.",
-  "skills": "./plugins/multi-core/skills",
-  "hooks": "./plugins/multi-core/hooks/hooks.json"
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json"
 }

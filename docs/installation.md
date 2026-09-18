@@ -1,111 +1,89 @@
-# Installing Multi
+# Installation
 
 ## Requirements
 
-- Node 24.12 or newer from a persistent installation. Setup records its executable path.
-- Claude Code 2.1.272 or newer with function hooks. `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`
-  would block the local gateway, so the launcher replaces it for its session with
-  `DISABLE_AUTOUPDATER`, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING` and `DISABLE_BUG_COMMAND`.
-- OpenAI: the official Codex CLI (`codex`) and a ChatGPT login.
-- Cursor: the official Cursor SDK login. No separate Cursor CLI is required.
-- OpenCode Zen: an OpenCode account or an `OPENCODE_API_KEY`.
-- Antigravity: the official `agy` CLI and its native login.
+- Claude Code 2.1.272 or newer, with function hooks available.
+- Node 24.12 or newer on `PATH`. The plugin runs TypeScript directly, with no
+  build step.
+- An OpenRouter account and API key: https://openrouter.ai/keys
 
 ## Install
 
-In Claude Code, add the marketplace and install the providers you want:
+In Claude Code:
 
 ```text
-/plugin marketplace add greenpolo/cc-multi-cli-plugin
-/plugin install multi-openai@cc-multi-cli-plugin
-/plugin install multi-cursor@cc-multi-cli-plugin
-/plugin install multi-zen@cc-multi-cli-plugin
-/plugin install multi-antigravity@cc-multi-cli-plugin
+/plugin marketplace add PaulCailly/claude-code-openrouter
+/plugin install openrouter@claude-code-openrouter
 /reload-plugins
-/multi-core:setup
 ```
 
-Each provider pulls in `multi-core`. Setup writes one marked PATH block to the
-applicable shell file: `~/.bashrc`, `~/.zshrc`, fish's config file, or the
-PowerShell profile. It writes wrappers and shims under Multi's platform data
-directory. It never shadows `claude` unless you ask for that name; `claude-multi`
-starts Multi. Open a new terminal after setup.
+Install at **user scope**. Startup runs before the workspace trust prompt, so a
+project-scope install is refused.
 
-## Customize the launch
+Then, in a terminal:
 
-Setup accepts two optional flags. Both persist in Multi's install state, so
-re-running setup without them keeps your choices.
-
-| Flag | Default | Effect |
-| --- | --- | --- |
-| `--command <name>` | `claude-multi` | Name of the launch command placed on PATH. `multi` is reserved. |
-| `--models <selection>` | `all` | External rows in `/model`: `all`, `none`, or comma-separated full IDs such as `multi/openai/gpt-6-astra,multi/cursor/grok-4.6`. Claude's own models always stay listed. |
-
-```text
-/multi-core:setup --command multiclaude --models multi/openai/gpt-6-astra,multi/zen/kimi-k2.5
+```sh
+npm install -g claude-code-openrouter
+claude-openrouter connect
+claude-openrouter
 ```
 
-Multi is the real Claude Code binary started behind a local gateway, so only the
-command name differs from a plain launch. Naming the command `claude` is allowed
-but shadows the plain command: every `claude` launch, including scripts, editors
-and agents that call `claude -p`, starts the gateway first. Nested runs inside a
-Multi session pass through to plain Claude. Setup prints a warning when you pick
-that name; re-run with `--command claude-multi` to restore the default. Setting
-`MULTI_MODELS` in the environment overrides the saved model selection for one
-launch. Model IDs are listed in each provider's documentation.
+`npx claude-code-openrouter` works too if you would rather not install globally.
 
-## Connect accounts
+## What gets written
 
-| Provider | Command | Account or credential |
-| --- | --- | --- |
-| OpenAI | `/multi-openai:login` | Codex's official ChatGPT login |
-| Cursor | `/multi-cursor:login` | Official Cursor SDK browser login |
-| OpenCode Zen | `/multi-zen:connect` | OpenCode auth or an API key |
-| Antigravity | `/multi-antigravity:connect` | The official `agy` login and scoped hook |
+| Path | Contents |
+| --- | --- |
+| `<config>/claude-code-openrouter/auth.json` | the API key, mode 0600 |
+| `<cache>/claude-code-openrouter/catalog.json` | the last fetched model catalog |
 
-Run Zen key entry in a separate terminal. After connecting any provider, relaunch
-Claude so its models and workers are discovered. `multi status` reports installed
-and enabled providers; it does not authenticate accounts or run inference.
+Nothing else. No shell configuration is edited, and plain `claude` is unchanged.
 
-## Update
+## Commands
 
-Use Claude's normal marketplace and plugin update commands. Re-running
-`/multi-core:setup` refreshes the startup files and wrappers.
+| Command | Purpose |
+| --- | --- |
+| `claude-openrouter` | launch Claude with the OpenRouter rows and workers |
+| `claude-openrouter connect` | store an API key from a hidden prompt |
+| `claude-openrouter status` | plugin path, key presence, catalog and credits |
+| `claude-openrouter models` | the admitted catalog as JSON |
+| `claude-openrouter uninstall` | print exactly what to remove |
 
-## Uninstall
+Arguments after `--` go to `claude` unchanged, for example
+`claude-openrouter -- --resume <session-id>`.
 
-Run `multi uninstall` before removing the plugins. It removes Multi's marked PATH
-block and known wrappers while retaining provider logins. Open a new terminal,
-then remove the provider and core plugins through `/plugin` if desired.
+## Environment
+
+| Variable | Effect |
+| --- | --- |
+| `OPENROUTER_API_KEY` | use this key instead of the stored one |
+| `OPENROUTER_MODELS` | comma-separated ids for the `/model` rows; empty hides them |
+| `OPENROUTER_PROVIDER` | raw JSON merged into the request's `provider` routing field |
+| `OPENROUTER_AUTH_FILE` | override the auth file path |
+| `OPENROUTER_CATALOG_FILE` | pin the catalog to a file and skip the network |
+| `OPENROUTER_RECEIPTS_FILE` | append JSONL receipts for each completed request |
+
+## From a checkout
+
+```sh
+npm ci
+/plugin marketplace add /path/to/checkout   # inside Claude Code
+node src/launcher.ts --openrouter-models
+node src/launcher.ts -- --model openrouter/anthropic/claude-sonnet-5
+```
 
 ## For agents
 
-1. Check Node, Claude Code, the shell, the platform, and the requested providers.
-2. Install the selected plugins at user scope through Claude's plugin manager.
-3. Ask two optional questions, offering the defaults: what to name the launch
-   command (default `claude-multi`; explain that only the name differs from a
-   plain launch, and that `claude` would shadow the plain command), and which
-   external models to show in `/model` (default all; full IDs are in the provider
-   docs). Run `/multi-core:setup` with `--command` and `--models` as chosen and
-   explain the marked PATH change.
-4. Hand browser sign-in to the human. Have the human enter Zen keys in a separate
-   terminal. Never accept credentials in chat or an agent tool session.
-5. Run `multi status`. Ask the human to open a new terminal, launch the chosen
-   command, and check `/model`.
+Install the plugin at user scope with the two `/plugin` commands above, then
+`npm install -g claude-code-openrouter`. Ask the human to run
+`claude-openrouter connect` themselves: the key must never be requested, printed
+or passed as a command argument. Confirm with `claude-openrouter status`, which
+reports key presence without revealing the key.
 
-## Run from a checkout
+## Uninstall
 
 ```sh
-npm install
-node plugins/multi-core/src/launcher.ts
-MULTI_ANTIGRAVITY=1 node plugins/multi-core/src/launcher.ts
-node plugins/multi-core/src/launcher.ts --antigravity-setup
+claude-openrouter uninstall
 ```
 
-The launcher loads the checkout's `multi-core` plugin itself when the plugins
-are not installed, so the Claude Mods hooks work immediately from a checkout.
-You can still install the plugins from the checkout with `/plugin marketplace add
-/path/to/checkout` followed by the plugin installs above. Antigravity is enabled
-by installing `multi-antigravity`. From a checkout, set `MULTI_ANTIGRAVITY=1` to
-show its models and workers. Run `--antigravity-setup` after the official `agy`
-login to install its scoped permission hook.
+It prints the plugin command, the npm command and the two file paths to delete.

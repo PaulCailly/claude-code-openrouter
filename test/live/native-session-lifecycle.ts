@@ -10,10 +10,8 @@ import { isolatedEnvironment } from './environment.ts';
 
 const run = promisify(execFile);
 const root = await mkdtemp(path.join(os.tmpdir(), 'multi-session-lifecycle-'));
-const launcher = fileURLToPath(
-  new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-);
-const realClaude = process.env.MULTI_REAL_CLAUDE || 'claude';
+const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
+const realClaude = process.env.OPENROUTER_REAL_CLAUDE || 'claude';
 await mkdir(path.join(root, 'config'));
 await writeFile(
   path.join(root, 'config', '.claude.json'),
@@ -62,8 +60,8 @@ const env = isolatedEnvironment({
   HOME: root,
   CODEX_HOME: root,
   CLAUDE_CONFIG_DIR: path.join(root, 'config'),
-  MULTI_REAL_CLAUDE: wrapper,
-  MULTI_ENABLED_PROVIDERS: 'openai',
+  OPENROUTER_REAL_CLAUDE: wrapper,
+  OPENROUTER_ENABLED_PROVIDERS: 'openai',
   ANTHROPIC_AUTH_TOKEN: 'fixture',
   NODE_OPTIONS: `--import=${fixture}`,
 });
@@ -90,7 +88,7 @@ async function launch(session?: string) {
     ],
     { cwd: root, env, timeout: 30000 },
   );
-  assert.doesNotMatch(stdout + stderr, /DEP0190|Multi permission sync failed/);
+  assert.doesNotMatch(stdout + stderr, /DEP0190|OpenRouter permission sync failed/);
   const result = JSON.parse(stdout);
   assert.equal(result.is_error, false);
   assert.equal(result.result, 'RESUME_OK');
@@ -125,7 +123,7 @@ assert(
 for (const option of ['--bg', '--background', 'attach', 'respawn']) {
   await assert.rejects(
     run(process.execPath, [launcher, '--', option], { cwd: root, env, timeout: 30000 }),
-    /Multi sessions must stay attached/,
+    /claude-code-openrouter sessions must stay attached/,
   );
 }
 console.log(

@@ -1,36 +1,22 @@
-cc-multi-cli-plugin
-Copyright 2026 greenpolo
+claude-code-openrouter
+Copyright 2026 Paul Cailly
 
-Earlier releases included software developed by:
+This product derives from cc-multi-cli-plugin
+(https://github.com/greenpolo/cc-multi-cli-plugin), Copyright 2026 greenpolo,
+licensed under Apache 2.0, at commit 3dc5066. The gateway, the Claude Mods
+control plane, permission handling and the chat-completions translator originate
+there. The OpenAI, Cursor, Antigravity and OpenCode Zen provider integrations
+have been removed, and the remaining provider path was rewritten for OpenRouter.
 
-- OpenAI (https://openai.com), from the codex-plugin-cc project
-  (https://github.com/openai/codex-plugin-cc), licensed under Apache 2.0.
-  The former companion runtime was derived from this work.
+That project in turn acknowledged work by OpenAI (codex-plugin-cc,
+https://github.com/openai/codex-plugin-cc, Apache 2.0), sakibsadmanshajib
+(gemini-plugin-cc, https://github.com/sakibsadmanshajib/gemini-plugin-cc,
+Apache 2.0) and blowmage (cursor-agent-acp-npm,
+https://github.com/blowmage/cursor-agent-acp-npm, MIT). None of those modules
+are present here; this acknowledgment preserves their provenance.
 
-- sakibsadmanshajib (https://github.com/sakibsadmanshajib), from the
-  gemini-plugin-cc project
-  (https://github.com/sakibsadmanshajib/gemini-plugin-cc), licensed under
-  Apache 2.0. The former ACP transport layer was derived from this work.
+The local token estimator uses js-tiktoken
+(https://github.com/dqbd/tiktoken), licensed under MIT, with OpenAI tiktoken
+encoding data.
 
-- blowmage (https://github.com/blowmage), from the cursor-agent-acp-npm
-  project (https://github.com/blowmage/cursor-agent-acp-npm), licensed under
-  MIT. The former Cursor ACP adapter was informed by this work.
-
-Those companion and CLI/ACP modules, including the vendored ACP SDK bundle,
-have been removed. These acknowledgments preserve their provenance.
-
-This plugin is a community project, not affiliated with Anthropic, OpenAI,
-Google, GitHub, or Cursor.
-
-The local token estimator uses js-tiktoken (https://github.com/dqbd/tiktoken),
-licensed under MIT, with OpenAI tiktoken encoding data. Translator compatibility
-behavior was researched against CLIProxyAPI; no gateway engine or authentication
-implementation from that project is included.
-
-The Cursor integration depends on the official @cursor/sdk package (Anysphere).
-That dependency has its own LICENSE.md and Cursor terms; this repository's
-Apache 2.0 license does not relicense the SDK. No SDK implementation is vendored.
-
-The automatic reviewer includes OpenAI Codex Guardian policy assets under
-plugins/multi-openai/src/guardian/, from https://github.com/openai/codex,
-licensed under Apache 2.0. Their upstream LICENSE and NOTICE are included there.
+This is a community project, affiliated with neither Anthropic nor OpenRouter.

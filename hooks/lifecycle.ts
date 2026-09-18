@@ -1,0 +1,83 @@
+import type { EngineInterface, Register } from 'claude-code';
+import { forgetUsageSession } from './usage.ts';
+
+type Status = {
+  model?: string;
+  state?: string;
+  detail?: string;
+  elapsedMs?: number;
+  startedAt?: number;
+};
+
+export const register: Register = (on) => {
+  const running = new Map<string, object>();
+  on('turn.step', async function* ($, event, next) {
+    // Observability only: forward every core chunk unchanged, without serving inference.
+    void postStep($, event);
+    return yield* next(event);
+  });
+  on('turn.complete', async ($, event, next) => {
+    await request($, '/openrouter/mod/usage/complete', {
+      sessionId: await $.session.id(),
+      agentId: event.agentId,
+      turnId: event.turnId,
+      outcome: event.reason,
+    });
+    running.delete(event.agentId ?? 'main');
+    if (event.isAborted) {
+      void cancelCompaction($, event.agentId);
+    }
+    void $.ui.status(undefined);
+    return next(event);
+  });
+  on('session.detach', async ($, event, next) => {
+    forgetUsageSession(await $.session.id());
+    running.clear();
+    void detach($);
+    return next(event);
+  });
+};
+
+async function postStep($: EngineInterface, event: object) {
+  await request($, '/openrouter/mod/telemetry', { ...event, sessionId: await $.session.id() });
+}
+
+async function detach($: EngineInterface) {
+  await request($, '/openrouter/mod/detach', { sessionId: await $.session.id() });
+}
+
+async function request(
+  $: EngineInterface,
+  route: string,
+  payload?: object,
+): Promise<Status | undefined> {
+  const base = await $.env.get('OPENROUTER_MOD_GATEWAY_URL');
+  const token = await $.env.get('OPENROUTER_GATEWAY_TOKEN');
+  if (!base || !token) {
+    return undefined;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const response = await Promise.race([
+      $.http.fetch(`${base}${route}`, {
+        method: payload ? 'POST' : 'GET',
+        headers: { 'content-type': 'application/json', 'x-openrouter-gateway-token': token },
+        ...(payload ? { body: JSON.stringify(payload) } : {}),
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Gateway timeout')), 1500);
+      }),
+    ]);
+    return response.ok ? (JSON.parse(response.text) as Status) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+async function cancelCompaction($: EngineInterface, agentId?: string) {
+  await request($, '/openrouter/mod/compact/cancel', { sessionId: await $.session.id(), agentId });
+}

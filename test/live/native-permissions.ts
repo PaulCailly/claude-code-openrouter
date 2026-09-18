@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs, stripVTControlCharacters } from 'node:util';
-import { hookCommand } from '../../plugins/multi-core/src/gateway/permission-hook.ts';
+import { hookCommand } from '../../src/gateway/permission-hook.ts';
 import { isolatedEnvironment } from './environment.ts';
 import type { HookInput, TranscriptEntry } from './native-events.ts';
 import { pty, skipIfPtyUnsupported } from './native-pty.ts';
@@ -74,7 +74,7 @@ for (const model of models) {
         '-c',
         pty,
         process.execPath,
-        fileURLToPath(new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url)),
+        fileURLToPath(new URL('../../src/launcher.ts', import.meta.url)),
         '--',
         prompt,
         '--model',
@@ -102,7 +102,7 @@ for (const model of models) {
           CODEX_HOME: process.env.CODEX_HOME,
           TERM: 'xterm-256color',
           CLAUDE_CONFIG_DIR: config,
-          MULTI_NATIVE_TRACE: '1',
+          OPENROUTER_NATIVE_TRACE: '1',
           CLAUDE_CODE_MAX_RETRIES: '0',
         }),
       },

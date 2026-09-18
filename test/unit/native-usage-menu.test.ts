@@ -3,14 +3,14 @@ import test from 'node:test';
 
 // Load the actual Mod modules without requiring Claude's host-only type package
 // in the offline TypeScript project. All runtime imports in these modules are erased types.
-const hooksUrl = new URL('../../plugins/multi-core/hooks/usage.ts', import.meta.url);
-const viewUrl = new URL('../../plugins/multi-core/hooks/usage-view.ts', import.meta.url);
+const hooksUrl = new URL('../../hooks/usage.ts', import.meta.url);
+const viewUrl = new URL('../../hooks/usage-view.ts', import.meta.url);
 const dashboard = {
   updatedAt: 'today',
   providers: [
     {
-      id: 'cursor',
-      name: 'Cursor',
+      id: 'openrouter',
+      name: 'OpenRouter',
       status: 'ready',
       summary: '$0.00 charged',
       details: ['native spend'],
@@ -22,7 +22,8 @@ test('usage client messages refresh props and receipts without losing providers 
   const requests: string[] = [];
   const engine = {
     env: {
-      get: async (name: string) => (name === 'MULTI_GATEWAY_TOKEN' ? 'secret' : 'http://localhost'),
+      get: async (name: string) =>
+        name === 'OPENROUTER_GATEWAY_TOKEN' ? 'secret' : 'http://localhost',
     },
     session: { id: async () => 'session/one' },
     http: {
@@ -61,7 +62,7 @@ test('usage client messages refresh props and receipts without losing providers 
   const next = async () => ({});
   await command(engine, { args: '' }, next);
   const event = {
-    requestId: 'multi-usage',
+    requestId: 'openrouter-usage',
     element: 'usage',
     module: 'hooks/usage-view.ts',
     data: { action: 'refresh' },
@@ -118,7 +119,7 @@ test('usage Client supports provider navigation, receipts and refresh without mo
   keyHandler?.({ key: 'r' });
   assert.deepEqual(posts.at(-1), { action: 'receipts' });
   keyHandler?.({ key: 'left' });
-  assert.equal(state?.selected, 'cursor');
+  assert.equal(state?.selected, 'openrouter');
   const providerTree = view(dashboard, surface);
   assert(JSON.stringify(providerTree).includes('native spend'));
   keyHandler?.({ key: 'r' });
@@ -132,7 +133,8 @@ test('quota advice is opt-in, session scoped, advisory and removed on detach', a
   let available = true;
   const engine = {
     env: {
-      get: async (name: string) => (name === 'MULTI_GATEWAY_TOKEN' ? 'secret' : 'http://localhost'),
+      get: async (name: string) =>
+        name === 'OPENROUTER_GATEWAY_TOKEN' ? 'secret' : 'http://localhost',
     },
     session: { id: async () => session },
     http: {
@@ -172,7 +174,7 @@ test('quota advice is opt-in, session scoped, advisory and removed on detach', a
   assert.equal(reads, 0);
   await command(engine, { args: '' }, next);
   const toggle = {
-    requestId: 'multi-usage',
+    requestId: 'openrouter-usage',
     element: 'usage',
     data: { action: 'toggle-quota-advice' },
   };

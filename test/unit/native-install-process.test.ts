@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { run } from '../../plugins/multi-core/src/install/process.ts';
+import { run } from '../../src/install/process.ts';
 
 // Exit 0 when PATH reaches the child, 3 when the environment arrived empty.
 const probe = ['-e', 'process.exit(process.env.PATH ? 0 : 3)'];
@@ -12,9 +12,9 @@ test('run inherits the parent environment when no options are supplied', async (
 });
 
 test('run passes an explicit environment through to the child', async () => {
-  const marker = ['-e', "process.exit(process.env.MULTI_RUN_PROBE === 'yes' ? 0 : 3)"];
+  const marker = ['-e', "process.exit(process.env.OPENROUTER_RUN_PROBE === 'yes' ? 0 : 3)"];
   assert.equal(
-    await run(process.execPath, marker, { env: { ...process.env, MULTI_RUN_PROBE: 'yes' } }),
+    await run(process.execPath, marker, { env: { ...process.env, OPENROUTER_RUN_PROBE: 'yes' } }),
     0,
   );
   assert.equal(await run(process.execPath, marker), 3);

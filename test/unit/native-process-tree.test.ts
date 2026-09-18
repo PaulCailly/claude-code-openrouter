@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { terminateProcessTree } from '../../plugins/multi-core/src/gateway/process-tree.ts';
+import { terminateProcessTree } from '../../src/gateway/process-tree.ts';
 
 test('terminates POSIX process groups and always attempts the direct PID fallback', () => {
   const calls: [number, NodeJS.Signals | number | undefined][] = [];

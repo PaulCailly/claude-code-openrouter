@@ -1,18 +1,17 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { AgentCatalog } from '../../plugins/multi-core/src/gateway/agent-catalog.ts';
-import {
-  checkLauncherArgumentLimit,
-  workerDefinitions,
-} from '../../plugins/multi-core/src/launcher.ts';
-import { cursorModelOptions, cursorPickerOptions } from '../../plugins/multi-cursor/src/models.ts';
-import { ZEN_MODELS } from '../../plugins/multi-zen/src/models.ts';
+import { checkLauncherArgumentLimit, workerDefinitions } from '../../src/launcher.ts';
+import { parseCatalog } from '../../src/openrouter/catalog.ts';
+import { pickerOptions } from '../../src/openrouter/models.ts';
+
+const catalogFixture = fileURLToPath(new URL('../fixtures/models.json', import.meta.url));
+const catalogPayload: unknown = JSON.parse(await readFile(catalogFixture, 'utf8'));
 
 async function writeClaudeFixture(bin: string, source: string): Promise<void> {
   if (process.platform === 'win32') {
@@ -39,7 +38,7 @@ function windowsHome(root: string): NodeJS.ProcessEnv {
   };
 }
 
-test('launcher preserves native auth, disables unavailable auto mode, and merges caller settings', {
+test('launcher preserves native auth, keeps Claude-reviewed auto mode, and merges caller settings', {
   skip: process.platform === 'win32',
 }, async (t) => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-test-'));
@@ -49,17 +48,15 @@ test('launcher preserves native auth, disables unavailable auto mode, and merges
     path.join(cwd, 'bin'),
     `#!/usr/bin/env node
 const fs=require('node:fs');const args=process.argv.slice(2);
-if(args.includes('plugin')&&args.includes('list')){console.log(process.env.TEST_PLUGIN==='enabled'?JSON.stringify([{id:'multi-core@cc-multi-cli-plugin',enabled:true,installPath:process.cwd()}]):'[]');process.exit(0)}
+if(args.includes('plugin')&&args.includes('list')){console.log(process.env.TEST_PLUGIN==='enabled'?JSON.stringify([{id:'openrouter@claude-code-openrouter',enabled:true,installPath:process.cwd()}]):'[]');process.exit(0)}
 if(args[0]==='--version'){console.log(process.env.TEST_CLAUDE_VERSION??'2.1.272');process.exit(0)}
-const result=(value)=>{const base=process.env.MULTI_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/multi/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-multi-gateway-token':process.env.MULTI_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
+const result=(value)=>{const base=process.env.OPENROUTER_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/openrouter/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-openrouter-gateway-token':process.env.OPENROUTER_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
 if(args[0]==='auth'){if(process.env.TEST_AUTH==='malformed'){console.log('not-json');process.exit(0)}if(process.env.TEST_AUTH==='error'){process.exit(2)}if(process.env.TEST_AUTH==='missing'){console.log('{}');process.exit(0)}process.stdout.write(JSON.stringify({loggedIn:process.env.TEST_AUTH==='yes'}));process.exitCode=process.env.TEST_AUTH==='yes'?0:1}else{
 const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'utf8'));
- result(JSON.stringify({agentView:process.env.CLAUDE_CODE_DISABLE_AGENT_VIEW,backgroundTasks:process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS,functionHooks:process.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS,settings,models:args.filter(x=>x.startsWith('multi/')),args,settingsCount:args.filter(x=>x==='--settings').length,hasLocalToken:!!process.env.MULTI_GATEWAY_TOKEN,apiTimeout:process.env.API_TIMEOUT_MS,auth:process.env.ANTHROPIC_API_KEY?'api':process.env.ANTHROPIC_AUTH_TOKEN?'local':'native'}));}
+ result(JSON.stringify({agentView:process.env.CLAUDE_CODE_DISABLE_AGENT_VIEW,backgroundTasks:process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS,functionHooks:process.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS,settings,models:args.filter(x=>x.startsWith('openrouter/')),args,settingsCount:args.filter(x=>x==='--settings').length,hasLocalToken:!!process.env.OPENROUTER_GATEWAY_TOKEN,apiTimeout:process.env.API_TIMEOUT_MS,auth:process.env.ANTHROPIC_API_KEY?'api':process.env.ANTHROPIC_AUTH_TOKEN?'local':'native'}));}
 `,
   );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   for (const auth of ['no', 'yes', 'api']) {
     const { stdout } = await promisify(execFile)(
       process.execPath,
@@ -67,7 +64,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
         launcher,
         '--',
         '--model',
-        'multi/cursor/auto',
+        'openrouter/glm-5.3',
         '--settings',
         JSON.stringify({
           disableAgentView: false,
@@ -93,7 +90,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
     );
     const result = JSON.parse(stdout);
     assert.equal(result.args.at(-2), '--plugin-dir');
-    assert.equal(result.args.at(-1), path.resolve(path.dirname(launcher), '../../..'));
+    assert.equal(result.args.at(-1), path.resolve(path.dirname(launcher), '..'));
     assert.equal(result.settingsCount, 1);
     assert.equal(result.settings.disableAgentView, true);
     assert.equal(result.agentView, '1');
@@ -101,7 +98,12 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
     assert.equal(result.functionHooks, '1');
     assert.equal(result.apiTimeout, auth === 'api' ? '1000' : '2147483647');
     assert.deepEqual(result.settings.permissions.deny, ['Bash(denied)']);
-    assert.equal(result.settings.permissions.disableAutoMode, 'disable');
+    // Claude executes every tool here, so its own review keeps auto mode available
+    // whenever Anthropic access exists.
+    assert.equal(
+      result.settings.permissions.disableAutoMode,
+      auth === 'no' ? 'disable' : undefined,
+    );
     assert.equal(
       result.hasLocalToken,
       true,
@@ -131,7 +133,7 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
     (
       await promisify(execFile)(
         process.execPath,
-        [launcher, '--', '--plugin-dir', path.resolve(path.dirname(launcher), '../../..')],
+        [launcher, '--', '--plugin-dir', path.resolve(path.dirname(launcher), '..')],
         { cwd, timeout: 20000, env: baseEnvironment },
       )
     ).stdout,
@@ -194,10 +196,10 @@ const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'ut
   assert.equal(saved.settings.permissions.disableAutoMode, 'disable');
 });
 
-test('Zen credentials add picker models and named workers without leaking the key to Claude', {
+test('OpenRouter credentials add picker models and named workers without leaking the key to Claude', {
   skip: process.platform === 'win32',
 }, async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-zen-test-'));
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-openrouter-test-'));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const bin = path.join(cwd, 'bin');
   await mkdir(bin);
@@ -207,19 +209,17 @@ test('Zen credentials add picker models and named workers without leaking the ke
 const fs=require('node:fs');const args=process.argv.slice(2);
 if(args.includes('plugin')&&args.includes('list')){console.log('[]');process.exit(0)}
 if(args[0]==='--version'){console.log(process.env.TEST_CLAUDE_VERSION??'2.1.272');process.exit(0)}
-const result=(value)=>{const base=process.env.MULTI_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/multi/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-multi-gateway-token':process.env.MULTI_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
+const result=(value)=>{const base=process.env.OPENROUTER_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/openrouter/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-openrouter-gateway-token':process.env.OPENROUTER_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
 if(args[0]==='auth'){process.stdout.write(JSON.stringify({loggedIn:false}));process.exitCode=1}else{
 const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'utf8'));
 const agents=JSON.parse(args[args.indexOf('--agents')+1]);
-result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=>x.startsWith('multi/')),zenKeyInChild:process.env.OPENCODE_API_KEY,args}));}
+result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=>x.startsWith('openrouter/')),zenKeyInChild:process.env.OPENROUTER_API_KEY,args}));}
 `,
   );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   const { stdout } = await promisify(execFile)(
     process.execPath,
-    [launcher, '--', '--model', 'multi/zen/gpt-5.6-luna', '--dangerously-skip-permissions'],
+    [launcher, '--', '--model', 'openrouter/x/plain-tools', '--dangerously-skip-permissions'],
     {
       cwd,
       timeout: 20000,
@@ -230,7 +230,8 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
         XDG_DATA_HOME: path.join(cwd, 'data'),
         CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
         CODEX_HOME: cwd,
-        OPENCODE_API_KEY: 'zen-fixture-key',
+        OPENROUTER_API_KEY: 'openrouter-fixture-key',
+        OPENROUTER_CATALOG_FILE: catalogFixture,
       },
     },
   );
@@ -238,36 +239,25 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
   const pickerModels = result.settings.modelPicker.options.map(
     (option: { model: string }) => option.model,
   );
-  assert(pickerModels.includes('multi/zen/deepseek-v4-pro'));
-  assert(pickerModels.includes('multi/zen/muse-spark-1.3'));
+  // Only recommended ids present in the catalog become rows.
+  assert.deepEqual(pickerModels, [
+    'openrouter/anthropic/claude-sonnet-5',
+    'openrouter/z-ai/glm-5.3',
+  ]);
   assert.equal(
     result.settings.modelPicker.options.find(
-      (row: { model: string }) => row.model === 'multi/zen/muse-spark-1.3',
+      (row: { model: string }) => row.model === 'openrouter/z-ai/glm-5.3',
     ).behavesAs,
     'claude-sonnet-4-6',
   );
-  assert.equal(
-    result.settings.modelPicker.options.find(
-      (row: { model: string }) => row.model === 'multi/zen/deepseek-v4-pro',
-    ).behavesAs,
-    'claude-haiku-4-5',
-  );
-  assert.match(
-    result.settings.modelPicker.options.find(
-      (row: { model: string }) => row.model === 'multi/zen/deepseek-v4-pro',
-    ).description,
-    /effort not applicable/,
-  );
-  assert(!pickerModels.includes('multi/zen/gpt-5.6-luna'));
-  assert(!pickerModels.includes('multi/zen/big-pickle'));
-  assert(result.agents.includes('zen-gpt-5.6-luna'));
-  assert(result.agents.includes('zen-gpt-5.6-luna-high'));
-  assert(result.agents.includes('zen-big-pickle'));
-  assert(!result.agents.includes('zen-big-pickle-medium'));
+  assert(!pickerModels.includes('openrouter/x/plain-tools'));
+  assert(result.agents.includes('openrouter-anthropic-claude-sonnet-5'));
+  assert(result.agents.includes('openrouter-anthropic-claude-sonnet-5-high'));
+  assert(!result.agents.includes('openrouter-x-plain-tools'));
   assert.equal(result.zenKeyInChild, undefined);
   assert.equal(result.settings.permissions.disableAutoMode, 'disable');
   assert(result.args.includes('--dangerously-skip-permissions'));
-  assert.deepEqual(result.models, ['multi/zen/gpt-5.6-luna']);
+  assert.deepEqual(result.models, ['openrouter/x/plain-tools']);
   const disabled = await promisify(execFile)(process.execPath, [launcher], {
     cwd,
     timeout: 20000,
@@ -278,8 +268,8 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
       XDG_DATA_HOME: path.join(cwd, 'data'),
       CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
       CODEX_HOME: cwd,
-      OPENCODE_API_KEY: 'invalid key must not be read',
-      MULTI_ENABLED_PROVIDERS: '',
+      OPENROUTER_API_KEY: 'invalid key must not be read',
+      OPENROUTER_ENABLED_PROVIDERS: '',
     },
   });
   const withoutProviders = JSON.parse(disabled.stdout);
@@ -297,40 +287,36 @@ result(JSON.stringify({settings,agents:Object.keys(agents),models:args.filter(x=
         XDG_DATA_HOME: path.join(cwd, 'data'),
         CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
         CODEX_HOME: cwd,
-        OPENCODE_API_KEY: 'zen-fixture-key',
-        MULTI_MODELS: selection,
-        MULTI_ZEN_MODELS: 'big-pickle,glm-5.2',
+        OPENROUTER_API_KEY: 'openrouter-fixture-key',
+        OPENROUTER_CATALOG_FILE: catalogFixture,
+        OPENROUTER_MODELS: selection,
       },
     });
   const filtered = JSON.parse(
-    (await launchFiltered(' multi/zen/big-pickle, multi/zen/glm-5.2,multi/zen/big-pickle ')).stdout,
+    (await launchFiltered(' x/plain-tools, z-ai/glm-5.3,x/plain-tools ')).stdout,
   );
   assert.deepEqual(
     filtered.settings.modelPicker.options.map((option: { model: string }) => option.model),
-    ['multi/zen/big-pickle', 'multi/zen/glm-5.2'],
+    ['openrouter/x/plain-tools', 'openrouter/z-ai/glm-5.3'],
   );
-  assert.deepEqual(filtered.models, ['multi/zen/big-pickle']);
-  assert(filtered.agents.includes('zen-gpt-5.6-luna-high'));
-  const hidden = JSON.parse(
-    (await launchFiltered('', ['--model', 'multi/zen/gpt-5.6-luna'])).stdout,
-  );
+  assert(filtered.agents.includes('openrouter-x-plain-tools'));
+  const hidden = JSON.parse((await launchFiltered('')).stdout);
   assert.deepEqual(hidden.settings.modelPicker.options, []);
-  assert.deepEqual(hidden.models, ['multi/zen/gpt-5.6-luna']);
-  await assert.rejects(launchFiltered('multi/zen/typo'), /MULTI_MODELS: model is not available/);
+  await assert.rejects(launchFiltered('typo'), /OPENROUTER_MODELS/);
 });
 
-test('Zen saved auth supplies the no-login fallback without exposing credentials', {
+test('OpenRouter saved auth supplies the no-login fallback without exposing credentials', {
   skip: process.platform === 'win32',
 }, async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-zen-saved-test-'));
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-openrouter-saved-test-'));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const bin = path.join(cwd, 'bin');
-  const data = path.join(cwd, 'data', 'opencode');
+  const config = path.join(cwd, 'config', 'claude-code-openrouter');
   await mkdir(bin);
-  await mkdir(data, { recursive: true });
+  await mkdir(config, { recursive: true });
   await writeFile(
-    path.join(data, 'auth.json'),
-    JSON.stringify({ opencode: { type: 'api', key: 'saved-zen-fixture-key' } }),
+    path.join(config, 'auth.json'),
+    JSON.stringify({ openrouter: { type: 'api', key: 'saved-openrouter-fixture-key' } }),
   );
   await writeClaudeFixture(
     bin,
@@ -338,15 +324,13 @@ test('Zen saved auth supplies the no-login fallback without exposing credentials
 const fs=require('node:fs');const args=process.argv.slice(2);
 if(args.includes('plugin')&&args.includes('list')){console.log('[]');process.exit(0)}
 if(args[0]==='--version'){console.log(process.env.TEST_CLAUDE_VERSION??'2.1.272');process.exit(0)}
-const result=(value)=>{const base=process.env.MULTI_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/multi/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-multi-gateway-token':process.env.MULTI_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
+const result=(value)=>{const base=process.env.OPENROUTER_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/openrouter/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-openrouter-gateway-token':process.env.OPENROUTER_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
 if(args[0]==='auth'){process.stdout.write(JSON.stringify({loggedIn:false}));process.exitCode=1}else{
 const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'utf8'));
-result(JSON.stringify({settings,models:args.filter(x=>x.startsWith('multi/')),zenKeyInChild:process.env.OPENCODE_API_KEY}));}
+result(JSON.stringify({settings,models:args.filter(x=>x.startsWith('openrouter/')),zenKeyInChild:process.env.OPENROUTER_API_KEY}));}
 `,
   );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
   const { stdout } = await promisify(execFile)(process.execPath, [launcher], {
     cwd,
     timeout: 20000,
@@ -354,169 +338,29 @@ result(JSON.stringify({settings,models:args.filter(x=>x.startsWith('multi/')),ze
       PATH: `${bin}${path.delimiter}${process.env.PATH}`,
       HOME: cwd,
       ...windowsHome(cwd),
-      XDG_DATA_HOME: path.join(cwd, 'data'),
+      XDG_CONFIG_HOME: path.join(cwd, 'config'),
       CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
-      CODEX_HOME: cwd,
-      MULTI_ZEN_MODELS: 'mimo-v2.5-free,big-pickle',
+      OPENROUTER_CATALOG_FILE: catalogFixture,
+      OPENROUTER_MODELS: 'x/plain-tools,z-ai/glm-5.3',
     },
   });
   const result = JSON.parse(stdout);
-  assert.deepEqual(result.models, ['multi/zen/mimo-v2.5-free']);
+  assert.deepEqual(result.models, ['openrouter/x/plain-tools']);
   assert.equal(result.zenKeyInChild, undefined);
   assert.deepEqual(
     result.settings.modelPicker.options.map((option: { model: string }) => option.model),
-    ['multi/zen/mimo-v2.5-free', 'multi/zen/big-pickle'],
+    ['openrouter/x/plain-tools', 'openrouter/z-ai/glm-5.3'],
   );
 });
 
-test('Antigravity launcher groups picker families, keeps workers and enables function hooks', async (t) => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), 'launcher-agy-picker-'));
-  t.after(() => rm(cwd, { recursive: true, force: true }));
-  const bin = path.join(cwd, 'bin');
-  await mkdir(bin);
-  if (process.platform === 'win32') {
-    await writeFile(
-      path.join(bin, 'agy-fixture.js'),
-      `if(process.argv[2] !== 'models') process.exit(9);
-const rows=[['gemini-low','Gemini Low'],['gemini-medium','Gemini Medium'],['gemini-high','Gemini High'],['sonnet-thinking','Sonnet Thinking']];
-console.log(rows.map(row=>row.join(String.fromCharCode(9))).join(String.fromCharCode(10)));
-`,
-    );
-    await writeFile(
-      path.join(bin, 'agy.cmd'),
-      // npm's global shim layout, so the launcher runs the fixture through Node directly.
-      `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\agy-fixture.js" %*\r\n`,
-    );
-  } else {
-    await writeFile(
-      path.join(bin, 'agy'),
-      `#!/usr/bin/env node
-if(process.argv[2] !== 'models') process.exit(9);
-const rows=[['gemini-low','Gemini Low'],['gemini-medium','Gemini Medium'],['gemini-high','Gemini High'],['sonnet-thinking','Sonnet Thinking']];
-console.log(rows.map(row=>row.join(String.fromCharCode(9))).join(String.fromCharCode(10)));
-`,
-      { mode: 0o755 },
-    );
-  }
-  await writeClaudeFixture(
-    bin,
-    `#!/usr/bin/env node
-const fs=require('node:fs'); const {execFileSync}=require('node:child_process'); const args=process.argv.slice(2);
-if(args.includes('plugin')&&args.includes('list')){console.log(process.env.TEST_PLUGIN==='enabled'?JSON.stringify([{id:'multi-core@cc-multi-cli-plugin',enabled:true,installPath:process.cwd()}]):'[]');process.exit(0)}
-if(args[0]==='--version'){console.log(process.env.TEST_CLAUDE_VERSION??'2.1.272');process.exit(0)}
-const result=(value)=>{const base=process.env.MULTI_MOD_GATEWAY_URL;if(!base){console.log(value);return}const url=new URL(base+'/multi/mod/session');const req=require('node:http').request(url,{method:'POST',headers:{'content-type':'application/json','x-multi-gateway-token':process.env.MULTI_GATEWAY_TOKEN}},()=>console.log(value));req.on('error',()=>console.log(value));req.end(JSON.stringify({sessionId:'fixture',event:'start'}));};
-if(args[0]==='auth'){console.log('{"loggedIn":false}');process.exit(1)}
-if(args.includes('plugin')){console.log('[]');process.exit(0)}
-const settings=JSON.parse(fs.readFileSync(args[args.indexOf('--settings')+1],'utf8'));
-const agents=JSON.parse(args[args.indexOf('--agents')+1]);
-if(process.env.CLAUDE_CODE_ENABLE_FUNCTION_HOOKS !== '1') throw new Error('function hooks missing');
-result(JSON.stringify({settings,agents}));
-`,
-  );
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
-  const custom = {
-    model: 'custom/model',
-    label: 'Keep me',
-    description: 'Unchanged',
-    behavesAs: 'claude-opus-4-6',
-  };
-  const { stdout } = await promisify(execFile)(
-    process.execPath,
-    [
-      launcher,
-      '--settings',
-      JSON.stringify({ modelPicker: { options: [custom] }, hooks: { Stop: [] } }),
-    ],
-    {
-      cwd,
-      timeout: 20000,
-      env: {
-        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-        HOME: cwd,
-        ...windowsHome(cwd),
-        CLAUDE_CONFIG_DIR: path.join(cwd, 'claude'),
-        CODEX_HOME: cwd,
-        MULTI_ANTIGRAVITY: '1',
-      },
-    },
-  );
-  const { settings, agents } = JSON.parse(stdout);
-  const rows: { model: string; behavesAs: string }[] = settings.modelPicker.options;
-  assert.deepEqual(
-    rows.map(({ model }) => model),
-    ['multi/antigravity/gemini', 'multi/antigravity/sonnet-thinking', custom.model],
-  );
-  assert.equal(rows[0].behavesAs, 'claude-sonnet-4-6');
-  assert.deepEqual(rows[2], custom);
-  assert.deepEqual(settings.hooks.Stop, []);
-  for (const effort of ['low', 'medium', 'high']) {
-    assert.equal(agents[`antigravity-gemini-${effort}`].effort, effort);
-    assert.equal(
-      agents[`antigravity-gemini-${effort}`].model,
-      `multi/antigravity/gemini-${effort}`,
-    );
-  }
-  assert.equal(agents['antigravity-gemini'].model, rows[0].model);
-  const catalog = new AgentCatalog(
-    agents,
-    rows.map(({ model }) => model),
-  );
-  const listing = Object.entries(agents)
-    .map(([name, value]) => {
-      const worker = value as { description: string; tools: string[] };
-      return `- ${name}: ${worker.description} (Tools: ${worker.tools.join(', ')})`;
-    })
-    .join('\n');
-  const compacted = JSON.stringify(
-    catalog.compact({
-      messages: [
-        {
-          role: 'user',
-          content: `<system-reminder>\nAvailable agent types for the Agent tool:\n${listing}\n</system-reminder>`,
-        },
-      ],
-    }),
-  );
-  assert.match(compacted, /- antigravity-gemini:/);
-  assert.match(compacted, /- antigravity-sonnet-thinking:/);
-  assert.doesNotMatch(compacted, /antigravity-gemini-(low|medium|high):/);
-});
-
-test('launcher registers only Cursor picker workers and keeps the representative catalog under 30 KB', () => {
-  const cursor = cursorModelOptions(
-    ['default', 'grok-4.6', 'composer-2.5', 'catalog-only'].map((id) => ({
-      id,
-      displayName: id,
-      variants: [{ displayName: 'Default', isDefault: true, params: [] }],
-    })),
-  );
-  const picker = cursorPickerOptions(cursor);
-  const antigravity = [
-    'gemini',
-    'claude',
-    'gpt',
-    'sonnet',
-    'opus',
-    'flash',
-    'thinking',
-    'gemini-low',
-    'gemini-medium',
-    'gemini-high',
-  ].map((id) => ({
-    id,
-    model: `multi/antigravity/${id}`,
-    label: `Antigravity · ${id}`,
-    worker: `antigravity-${id}`,
-  }));
-  const agents = workerDefinitions(true, picker, true, antigravity);
+test('launcher registers OpenRouter workers and keeps the representative catalog under 30 KB', () => {
+  const rows = pickerOptions(parseCatalog(catalogPayload), undefined);
+  const agents = workerDefinitions(rows);
   const definitions = JSON.stringify(agents);
   const definitionBytes = Buffer.byteLength(definitions);
-  assert.equal(Object.keys(agents).filter((name) => name.startsWith('cursor-')).length, 3);
-  assert(!Object.keys(agents).some((name) => name.includes('catalog-only')));
+  assert(Object.keys(agents).every((name) => name.startsWith('openrouter-')));
   assert(definitionBytes < 30000, `representative worker JSON was ${definitionBytes} bytes`);
-  assert.equal(ZEN_MODELS.length, 19);
+  assert.equal(rows.length, 2);
 });
 
 test('launcher argument limits are platform-aware and identify largest providers', () => {
@@ -562,18 +406,23 @@ test('launcher argument limits are platform-aware and identify largest providers
   );
 });
 
-test('the Zen model listing is available without authentication', async () => {
-  const launcher = fileURLToPath(
-    new URL('../../plugins/multi-core/src/launcher.ts', import.meta.url),
-  );
-  const { stdout } = await promisify(execFile)(process.execPath, [launcher, '--zen-models'], {
-    timeout: 20000,
-    env: {
-      PATH: process.env.PATH,
-      HOME: os.tmpdir(),
-      XDG_DATA_HOME: path.join(os.tmpdir(), 'missing-zen-data'),
+test('the OpenRouter model listing is available without authentication', async () => {
+  const launcher = fileURLToPath(new URL('../../src/launcher.ts', import.meta.url));
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    [launcher, '--openrouter-models'],
+    {
+      timeout: 20000,
+      maxBuffer: 8 * 1024 * 1024,
+      env: {
+        PATH: process.env.PATH,
+        HOME: os.tmpdir(),
+        XDG_DATA_HOME: path.join(os.tmpdir(), 'missing-openrouter-data'),
+        OPENROUTER_CATALOG_FILE: catalogFixture,
+      },
     },
-  });
+  );
   const models = JSON.parse(stdout);
-  assert(models.some((model: { id: string }) => model.id === 'big-pickle'));
+  assert(models.some((model: { id: string }) => model.id === 'anthropic/claude-sonnet-5'));
+  assert(!models.some((model: { id: string }) => model.id === 'meta/no-tools-model'));
 });
