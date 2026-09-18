@@ -23,12 +23,14 @@ project-scope install is refused.
 Then, in a terminal:
 
 ```sh
-npm install -g claude-code-openrouter
+npm install -g github:PaulCailly/claude-code-openrouter
 claude-openrouter connect
 claude-openrouter
 ```
 
-`npx claude-code-openrouter` works too if you would rather not install globally.
+The package is not published to npm yet, so the command installs from the
+repository. `npx github:PaulCailly/claude-code-openrouter` works too if you would
+rather not install globally.
 
 ## What gets written
 
@@ -75,7 +77,7 @@ node src/launcher.ts -- --model openrouter/anthropic/claude-sonnet-5
 ## For agents
 
 Install the plugin at user scope with the two `/plugin` commands above, then
-`npm install -g claude-code-openrouter`. Ask the human to run
+`npm install -g github:PaulCailly/claude-code-openrouter`. Ask the human to run
 `claude-openrouter connect` themselves: the key must never be requested, printed
 or passed as a command argument. Confirm with `claude-openrouter status`, which
 reports key presence without revealing the key.

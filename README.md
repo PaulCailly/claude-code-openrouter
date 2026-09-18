@@ -29,10 +29,13 @@ In Claude Code:
 Then, in a terminal (Node 24.12 or newer):
 
 ```sh
-npm install -g claude-code-openrouter
+npm install -g github:PaulCailly/claude-code-openrouter
 claude-openrouter connect
 claude-openrouter
 ```
+
+(The package is not on npm yet, so this installs the command straight from the
+repository.)
 
 `connect` prompts for an [OpenRouter API key](https://openrouter.ai/keys)
 privately and stores it with mode 0600 under your config directory. Launch with
