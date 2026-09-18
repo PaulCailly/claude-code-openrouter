@@ -519,3 +519,45 @@ test('fromChat rejects a tool finish without calls and normalizes tools on stop'
   );
   assert.equal(result.stop_reason, 'tool_use');
 });
+
+test('the trailing usage chunk may repeat the finished choice, as OpenRouter sends it', async () => {
+  const finished = {
+    index: 0,
+    delta: { content: '', role: 'assistant', reasoning: null },
+    finish_reason: 'stop',
+    native_finish_reason: 'end_turn',
+  };
+  const result = await fromChat(
+    sse([
+      { id: 'gen-1', choices: [{ index: 0, delta: { content: 'Hi there' } }] },
+      { id: 'gen-1', choices: [finished] },
+      {
+        id: 'gen-1',
+        choices: [finished],
+        usage: { prompt_tokens: 14, completion_tokens: 27, total_tokens: 41 },
+      },
+    ]),
+    model,
+    undefined,
+    { requireUsage: true },
+  );
+  assert.equal(result.stop_reason, 'end_turn');
+  assert.deepEqual(result.content, [{ type: 'text', text: 'Hi there' }]);
+  assert.equal(result.usage.input_tokens, 14);
+  assert.equal(result.usage.output_tokens, 27);
+});
+
+test('real content after completion is still refused', async () => {
+  await assert.rejects(
+    fromChat(
+      sse([
+        { id: 'gen-2', choices: [{ index: 0, delta: { content: 'Hi' }, finish_reason: 'stop' }] },
+        { id: 'gen-2', choices: [{ index: 0, delta: { content: ' more' } }] },
+      ]),
+      model,
+      undefined,
+      { requireUsage: false },
+    ),
+    /after completion/,
+  );
+});

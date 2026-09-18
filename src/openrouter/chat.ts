@@ -649,10 +649,19 @@ class ChatAccumulator {
     if (choice.index !== undefined && choice.index !== 0) {
       throw new Error('OpenRouter Chat returned a non-primary choice');
     }
-    if (this.ended) {
-      throw new Error('OpenRouter Chat emitted data after completion');
-    }
     const item = delta(choice.delta);
+    if (this.ended) {
+      // OpenRouter repeats the finished choice on its trailing usage chunk. That
+      // echo carries no new content; anything else after completion is a fault.
+      if (item.content || item.reasoning_content || item.tool_calls?.length) {
+        throw new Error('OpenRouter Chat emitted data after completion');
+      }
+      const repeated = finishReason(choice.finish_reason);
+      if (repeated !== undefined && repeated !== this.stop) {
+        throw new Error('OpenRouter Chat changed finish reason');
+      }
+      return;
+    }
     this.addReasoning(item.reasoning_content);
     this.addText(item.content);
     this.addTools(item.tool_calls);
